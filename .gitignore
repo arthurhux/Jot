@@ -1,0 +1,17 @@
+.build/
+.swiftpm/
+dist/
+Editor/node_modules/
+.DS_Store
+Assets/AppIcon.iconset/
+
+# Local design reviews and private development configuration.
+INTERFACE_REVIEW.md
+MODAL_REVIEW.md
+.env
+.env.*
+*.p12
+*.p8
+*.key
+*.mobileprovision
+*.provisionprofile
