@@ -2,20 +2,20 @@
 
 A small, local-first notes app for macOS. Capture an idea in a floating window, keep a checklist beside your work, and browse notes in a searchable modal. Jot is an independent app inspired by the convenience of quick notes; it does not use Raycast code or services.
 
-**[Download the macOS preview DMG](https://github.com/arthurhux/Jot/releases/tag/v1.0.0-preview.1)** · Apple silicon · macOS 14+
+**[Download the macOS preview DMG](https://github.com/arthurhux/Jot/releases/tag/v1.0.1-preview.1)** · Apple silicon · macOS 14+
 
 This preview is ad hoc signed and has not been notarized by Apple. macOS may block the first launch; see [Apple's instructions](https://support.apple.com/en-us/102445) for approving a specific app that you trust. Intel builds and automatic updates are not included yet.
 
 ## Features
 
 - Rich text with Markdown shortcuts, headings, checklists, lists, links, quotes, and highlighted code blocks.
-- A focused writing view with a Browse Notes modal for search, pinning, and recently deleted notes.
+- A focused writing view with a Browse Notes modal, separate Pinned and Notes sections, search, and recently deleted notes.
 - No artificial note-count limit. The modal shows a count, not a quota.
 - Automatic titles from the first meaningful line; a manual rename takes priority.
 - Settings for the global shortcut, floating behavior, and automatic window sizing.
 - Automatic local saving, with a backup of the previous saved document.
 - Selection and scroll restoration when switching notes.
-- A floating window, menu bar access, and a global keyboard shortcut.
+- A floating window, menu bar access, and a global keyboard shortcut, without a Dock or Command–Tab entry.
 - Markdown and text import, Markdown export, and recoverable recently deleted notes.
 
 Cloud sync, collaboration, and mobile apps are not included. Jot uses a native AppKit shell and a locally bundled Tiptap editor inside WebKit. The editor runs without a network connection.
@@ -82,11 +82,11 @@ The script builds for the current Mac's processor architecture. A build made on 
 | Command–W | Hide the notes window |
 | Command–Q | Save and quit |
 
-The default global shortcut is **Control–Option–J**. Open **Settings** using Command–comma, the title-bar Actions menu, or the menu-bar menu, then click the shortcut badge to record a replacement. The shortcut uses the macOS hotkey API and does not require Accessibility permission. Jot requests exclusive registration and reports conflicts; it preserves the previous shortcut if a replacement is unavailable. Other apps using their own event interception can still take priority. Closing the window hides it; the app stays available in the menu bar. Jot must remain running for its shortcut to work.
+The default global shortcut is **Control–Option–J**. Open **Settings** using Command–comma, the title-bar Actions menu, or the menu-bar menu, then click the shortcut badge to record a replacement. The shortcut uses the macOS hotkey API and does not require Accessibility permission. Jot requests exclusive registration and reports conflicts; it preserves the previous shortcut if a replacement is unavailable. Other apps using their own event interception can still take priority. Jot runs as a menu-bar app, with no Dock or Command–Tab entry. Closing the window hides it and keeps the process and shortcut running; Activity Monitor still lists Jot. Choose **Quit Jot** from its menu-bar menu or press Command–Q while the panel has focus to stop it. Jot must remain running for its shortcut to work.
 
 The panel floats above other apps by default. It joins desktop Spaces and eligible full-screen app Spaces without activating Jot or switching away from the current app. Command shortcuts are routed through the panel while it has keyboard focus, so they continue to work while another app's menu bar is visible. Change floating behavior in Settings or the Actions menu.
 
-Compact view automatically fits its height to the note. Resizing it by hand pauses automatic fitting; choose **View → Fit Window to Note** or enable automatic fitting in Settings to resume. The footer's type icon shows or hides the formatting toolbar.
+Compact view automatically fits its height to the note. Resizing it by hand pauses automatic fitting; enable automatic fitting in Settings to resume. The footer's type icon shows or hides the formatting toolbar.
 
 ## Motion and accessibility
 
@@ -95,6 +95,8 @@ Jot stays in dark appearance. The UI uses the supplied tweakcn tokens from `Them
 Toolbar, modal, note-action, and menu-bar icons come from the pinned official Lucide package. The web editor renders Lucide SVGs directly; the build generates matching native Core Graphics paths. Controls share a 16-point canvas and an absolute 1.5-point stroke with round caps and joins. Both renderers scale geometry independently of the stroke, keeping the weight consistent at different sizes. Icons and theme files are included in the app bundle and require no network connection.
 
 Standard interface icons share the theme's neutral muted-foreground color; active controls use a background or outline instead of changing the icon color. Browse Notes and Settings use a black translucent backdrop that keeps the surrounding note sharp. Native in-window frosting is confined to the rounded modal card, with a fine highlighted rim and a solid card fallback when macOS Reduce Transparency is enabled. The note browser's native search field receives keyboard focus immediately, and the underlying note cannot be edited while a modal is open.
+
+Search uses a native insertion caret without the default blue field outline. Pointer hover and arrow keys share an immediate row highlight; pin, trash, and restore actions appear on that row. Hovering does not scroll the list. Matching pinned notes appear above the remaining results, and the dialog height follows the filtered count. Settings keeps switches and the shortcut button on a shared trailing edge, uses spaced native shortcut symbols, and omits an appearance selector because the app stays dark.
 
 Typing, switching notes, keyboard commands, modal presentation, and automatic height updates respond immediately. Pointer controls use a restrained 0.97 press scale and approximately 120 ms settling; pointer-triggered compact-window transitions use approximately 180 ms. These timings are centralized in the native `MotionTokens` and editor CSS variables. macOS **Reduce Motion** disables the spatial effects, and the editor also respects increased contrast.
 
@@ -113,6 +115,10 @@ The JSON document contains rich text content and note metadata. Jot saves the pr
 Imported files must be UTF-8 Markdown or text, no larger than 10 MB per file. Markdown export includes the note body; the note title becomes the suggested filename.
 
 ## Development checks
+
+The native browser uses a virtualized AppKit table with stable note identities, native accessibility scrolling, and first/last-note accessibility actions. Search includes displayed fallback titles such as **Untitled**. Find/link controls adapt to narrow editor widths; modification dates include the year for older notes.
+
+See [UI regression checks](docs/ui-regression-checks.md) for the isolated stress-test app, fixture datasets, and validation limits.
 
 Run the native tests:
 

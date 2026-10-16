@@ -9,7 +9,7 @@ For a packaged release, people do not need Xcode, Node.js, npm, or the repositor
 3. Double-click Jot. A properly Developer ID-signed and notarized release may still show macOS's normal first-launch confirmation for an internet download.
 4. Use the menu-bar icon or **Control–Option–J** to open the notes panel from another app. **Command–comma** opens Settings, where the shortcut can be changed.
 
-Closing the notes window hides it and leaves Jot running. Quitting the app or restarting the Mac stops the shortcut until Jot is opened again. Automatic launch at login is not currently built in. Notes are stored on each person's own Mac; the released app does not contain your notes.
+Jot runs in the menu bar without a Dock or Command–Tab entry. Closing the notes window hides it and leaves the app and shortcut running; Activity Monitor still lists its process. Use **Quit Jot** in the menu-bar menu to stop it. Quitting the app or restarting the Mac stops the shortcut until Jot is opened again. Automatic launch at login is not currently built in. Notes are stored on each person's own Mac; the released app does not contain your notes.
 
 ## Current release readiness
 

@@ -58,6 +58,19 @@ struct Note: Identifiable, Codable, Equatable {
 
 @MainActor
 final class NoteStore: ObservableObject {
+    struct BrowserSection: Identifiable {
+        enum Kind: String { case pinned, notes, trash }
+        let kind: Kind
+        let notes: [Note]
+        var id: Kind { kind }
+        var title: String {
+            switch kind {
+            case .pinned: return "Pinned"
+            case .notes: return "Notes"
+            case .trash: return "Recently deleted"
+            }
+        }
+    }
     @Published private(set) var notes: [Note] = []
     @Published var selectedID: UUID? {
         didSet {
@@ -108,7 +121,7 @@ final class NoteStore: ObservableObject {
         let search = query.trimmingCharacters(in: .whitespacesAndNewlines)
         return notes.filter { note in
             guard note.isDeleted == showingTrash else { return false }
-            return search.isEmpty || note.title.localizedStandardContains(search)
+            return search.isEmpty || note.displayTitle.localizedStandardContains(search)
                 || note.plainText.localizedStandardContains(search)
                 || note.markdown.localizedStandardContains(search)
         }.sorted(by: Self.sortNotes)
@@ -116,6 +129,19 @@ final class NoteStore: ObservableObject {
 
     var activeCount: Int { notes.filter { !$0.isDeleted }.count }
     var trashCount: Int { notes.filter(\.isDeleted).count }
+
+    /// Sections preserve visibleNotes order, so arrow keys cross the boundary
+    /// in the same order the user sees. Filtering applies before grouping.
+    var browserSections: [BrowserSection] {
+        let visible = visibleNotes
+        if showingTrash { return [BrowserSection(kind: .trash, notes: visible)] }
+        let pinned = visible.filter(\.pinned)
+        let remaining = visible.filter { !$0.pinned }
+        var sections: [BrowserSection] = []
+        if !pinned.isEmpty { sections.append(BrowserSection(kind: .pinned, notes: pinned)) }
+        if !remaining.isEmpty || pinned.isEmpty { sections.append(BrowserSection(kind: .notes, notes: remaining)) }
+        return sections
+    }
 
     init(
         directory: URL? = nil,

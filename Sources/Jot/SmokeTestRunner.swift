@@ -20,12 +20,23 @@ final class SmokeTestRunner {
     func run() {
         Task { @MainActor in
             do {
+                try require(NSApplication.shared.activationPolicy() == .accessory, "Jot is still configured as a Dock application")
+                try require(Bundle.main.object(forInfoDictionaryKey: "LSUIElement") as? Bool == true, "Packaged Jot is missing its menu-bar agent flag")
                 try require(shortcutRegistered, "macOS rejected the global shortcut \(shortcutLabel)")
                 for _ in 0..<200 {
                     if editor.isReady { break }
                     try await Task.sleep(nanoseconds: 100_000_000)
                 }
                 try require(editor.isReady, "Bundled WebKit editor did not become ready: \(editor.failure ?? "timeout")")
+                guard let delegate = NSApplication.shared.delegate as? AppDelegate,
+                      let notesWindow = editor.webView?.window else { throw Failure("Notes window is missing") }
+                delegate.closeWindow(nil)
+                try await pause()
+                try require(!notesWindow.isVisible, "Closing the window did not hide the notes panel")
+                try require(NSApplication.shared.activationPolicy() == .accessory, "Hiding the panel changed the background app policy")
+                delegate.showWindow(nil)
+                try await pause()
+                try require(notesWindow.isVisible, "The background app could not reopen its notes panel")
                 let first = store.createNote()
                 store.updateTitle(id: first, title: "Integration test")
                 try await pause()
@@ -62,6 +73,15 @@ final class SmokeTestRunner {
                 guard let window = editor.webView?.window,
                       let search = searchField(in: window.contentView) else { throw Failure("Native modal search field is missing") }
                 try require(window.firstResponder === search.currentEditor(), "Notes modal did not take keyboard focus")
+                try require(search.focusRingType == NSFocusRingType.none && search.cell?.focusRingType == NSFocusRingType.none, "Notes search still draws a default blue focus ring")
+                guard let fieldEditor = search.currentEditor() as? NSTextView,
+                      let selectAll = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0, windowNumber: window.windowNumber, context: nil, characters: "a", charactersIgnoringModifiers: "a", isARepeat: false, keyCode: 0) else {
+                    throw Failure("Native search command test could not be created")
+                }
+                fieldEditor.string = "Search replacement"
+                fieldEditor.setSelectedRange(NSRange(location: fieldEditor.string.utf16.count, length: 0))
+                try require(window.performKeyEquivalent(with: selectAll), "Notes search did not handle Command-A")
+                try require(fieldEditor.selectedRange() == NSRange(location: 0, length: fieldEditor.string.utf16.count), "Command-A did not select the search query")
                 let blocked = try await js("window.jot.runCommand('insertMarkdown', 'Blocked modal edit')") as? Bool
                 try require(blocked == false, "The note behind the modal is still editable")
                 state.overlay = nil
@@ -71,7 +91,7 @@ final class SmokeTestRunner {
                 _ = try await js("window.jot.runCommand('insertMarkdown', 'After modal')")
                 try await pause()
                 try require(store.selectedNote?.plainText.contains("After modal") == true, "Editing after modal dismissal did not reach storage")
-                print("JOT_SMOKE_TEST_PASS: global shortcut \(shortcutLabel) registered; WebKit ready; modal focus and edit protection, automatic titles, manual rename protection, Markdown, bold, tasks, code, native autosave, note switching, find, pin, trash, restore")
+                print("JOT_SMOKE_TEST_PASS: menu-bar accessory policy; hide and reopen panel; global shortcut \(shortcutLabel) registered; WebKit ready; modal focus and edit protection, automatic titles, manual rename protection, Markdown, bold, tasks, code, native autosave, note switching, find, pin, trash, restore")
                 fflush(stdout)
                 NSApplication.shared.terminate(nil)
             } catch {

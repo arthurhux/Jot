@@ -35,16 +35,23 @@
   </div>
   <form id="find-bar" hidden role="search" aria-label="Find in note">
     <input id="find-input" type="search" placeholder="Find in note" aria-label="Find in note" autocomplete="off" spellcheck="false">
-    <output id="find-count" aria-live="polite"></output>
-    <button type="button" id="find-prev" title="Previous match" aria-label="Previous match" data-icon="arrow-up"></button>
-    <button type="submit" id="find-next" title="Next match" aria-label="Next match" data-icon="arrow-down"></button>
-    <button type="button" id="find-close" title="Close find (Escape)" aria-label="Close find" data-icon="x"></button>
+    <div class="bar-actions">
+      <output id="find-count" aria-live="polite"></output>
+      <div class="bar-buttons">
+        <button type="button" id="find-prev" title="Previous match" aria-label="Previous match" data-icon="arrow-up"></button>
+        <button type="submit" id="find-next" title="Next match" aria-label="Next match" data-icon="arrow-down"></button>
+        <button type="button" id="find-close" title="Close find (Escape)" aria-label="Close find" data-icon="x"></button>
+      </div>
+    </div>
   </form>
-  <form id="link-bar" hidden aria-label="Edit link">
-    <input id="link-input" type="text" placeholder="https://example.com" aria-label="Link address" autocomplete="off" spellcheck="false">
-    <button type="submit">Apply</button>
-    <button type="button" id="link-remove">Remove</button>
-    <button type="button" id="link-close" aria-label="Cancel link" data-icon="x"></button>
+  <!-- Normalize bare domains and validate supported schemes in the editor. -->
+  <form id="link-bar" hidden aria-label="Edit link" novalidate>
+    <input id="link-input" type="url" placeholder="https://example.com" aria-label="Link address" autocomplete="off" spellcheck="false">
+    <div class="bar-actions">
+      <button type="submit">Apply</button>
+      <button type="button" id="link-remove">Remove</button>
+      <button type="button" id="link-close" aria-label="Cancel link" data-icon="x"></button>
+    </div>
   </form>
   <main id="scroller" aria-label="Note content"><div id="documents"></div></main>
 </body>
