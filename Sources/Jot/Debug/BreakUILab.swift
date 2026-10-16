@@ -239,6 +239,21 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
                         _ = try? await js("document.getElementById('find-close').click()")
                     }
                 }
+                for address in ["example.com", "mailto:hello@example.com", "tel:+15555550100", "javascript:alert(1)"] {
+                    let value = String(data: try! JSONEncoder().encode(address), encoding: .utf8)!
+                    let metrics = try? await js("""
+                    (() => {
+                        window.jot.runCommand('link');
+                        const input=document.getElementById('link-input'), form=document.getElementById('link-bar');
+                        input.value=\(value); input.dispatchEvent(new Event('input')); form.requestSubmit();
+                        const result={address:input.value, inputType:input.type, noValidate:form.noValidate,
+                            accepted:form.hidden, validationMessage:input.validationMessage};
+                        document.getElementById('link-close').click();
+                        return result;
+                    })()
+                    """)
+                    results.append(["check": "Link address validation", "expectedAccepted": !address.hasPrefix("javascript:"), "metrics": metrics ?? [:]])
+                }
                 zoom = false; applyEnvironment()
                 for note in store.notes {
                     let start = Date()

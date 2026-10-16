@@ -114,6 +114,9 @@ button:disabled, select:disabled { opacity: .35; }
 @media (prefers-reduced-transparency: reduce) {
   #toolbar, #find-bar, #link-bar { background: var(--paper); }
 }
+@media (pointer: coarse) {
+  #find-bar input, #link-bar input { font-size: 16px; }
+}
 @media (prefers-contrast: more) {
   :root.dark { --editor-muted: var(--foreground); --line: var(--ring); }
   #toolbar button[aria-pressed="true"] { outline: 1px solid var(--ring); }
