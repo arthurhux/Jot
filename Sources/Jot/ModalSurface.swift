@@ -12,6 +12,31 @@ enum ModalStyle {
     static let shadowOffset = 8.0
 }
 
+/// Native point sizes for the compact utility modals; captions stay at 12pt.
+enum ModalTypography {
+    static let title = Font.system(size: 17, weight: .semibold)
+    static let label = Font.system(size: 13, weight: .medium)
+    static let section = Font.system(size: 12, weight: .semibold)
+    static let caption = Font.system(size: 12)
+    static let noteTitle = Font.system(size: 14, weight: .medium)
+    static let shortcut = Font.system(size: 14, weight: .medium)
+    static let descriptionLineSpacing = 3.0
+}
+
+enum ModalLayout {
+    static let noteRowHeight = 64.0
+    static let sectionHeaderHeight = 36.0
+    static let browserChromeHeight = 108.0
+    static let emptyResultsHeight = 110.0
+    static let minimumBrowserHeight = 240.0
+    static let maximumBrowserHeight = 500.0
+    static let settingsHeight = 370.0
+    static let settingsInset = 22.0
+    static let settingsSectionSpacing = 24.0
+    static let settingsRowHeight = 40.0
+    static let shortcutSpacing = 6.0
+}
+
 /// Frost only the card; the surrounding note stays sharp beneath the scrim.
 struct ModalSurface: View {
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -60,6 +85,10 @@ struct NotesSearchField: NSViewRepresentable {
         field.isBezeled = false
         field.isBordered = false
         field.drawsBackground = false
+        // Search retains its native first responder and caret without the
+        // default blue rectangle competing with the modal's search surface.
+        field.focusRingType = .none
+        field.cell?.focusRingType = .none
         field.font = .systemFont(ofSize: 15)
         field.textColor = NSColor(JotTheme.foreground)
         field.placeholderAttributedString = NSAttributedString(string: "Search for notes…", attributes: [.foregroundColor: NSColor(JotTheme.mutedForeground)])

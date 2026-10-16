@@ -19,6 +19,7 @@ final class AppState: ObservableObject {
         didSet { if overlay != oldValue { overlayDidChange?(overlay) } }
     }
     @Published var browseSelection: UUID?
+    var browseSelectionUsesKeyboard = true
     var toggleCompact: (() -> Void)?
     var toggleFloating: (() -> Void)?
     var fitWindow: (() -> Void)?

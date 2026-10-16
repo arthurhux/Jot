@@ -4,6 +4,7 @@ import SwiftUI
 //   0ms  Keyboard commands and note switching respond immediately.
 //   0ms  Pointer press scales a control 1 → 0.97.
 //   0ms  Browse Notes and Settings open and dismiss immediately.
+//   0ms  Row hover and keyboard selection update the same highlight instantly.
 // Reduce Motion removes spatial movement. Values live in MotionTokens.
 enum MotionTokens {
     static let controlResponse = 0.12
@@ -14,14 +15,32 @@ enum MotionTokens {
 
 struct QuietButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(JotTheme.mutedForeground)
             .padding(6)
-            .background(configuration.isPressed ? JotTheme.accent : .clear, in: RoundedRectangle(cornerRadius: JotTheme.smallRadius))
+            .background(configuration.isPressed ? JotTheme.accent : isHovered ? JotTheme.foreground.opacity(0.08) : .clear, in: RoundedRectangle(cornerRadius: JotTheme.smallRadius))
             .scaleEffect(reduceMotion ? 1 : configuration.isPressed ? MotionTokens.pressedScale : 1)
             .animation(reduceMotion ? nil : .spring(response: MotionTokens.controlResponse, dampingFraction: 1), value: configuration.isPressed)
             .contentShape(Rectangle())
+            .onHover { isHovered = $0 }
+    }
+}
+
+struct ShortcutButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .overlay {
+                RoundedRectangle(cornerRadius: JotTheme.smallRadius)
+                    .fill(JotTheme.foreground.opacity(isHovered || configuration.isPressed ? 0.08 : 0))
+                    .allowsHitTesting(false)
+            }
+            .scaleEffect(reduceMotion ? 1 : configuration.isPressed ? MotionTokens.pressedScale : 1)
+            .animation(reduceMotion ? nil : .spring(response: MotionTokens.controlResponse, dampingFraction: 1), value: configuration.isPressed)
+            .onHover { isHovered = $0 }
     }
 }
 
@@ -72,7 +91,7 @@ struct WorkspaceView: View {
                         }
                     }
                     .frame(width: min(430, max(280, geometry.size.width - 36)))
-                    .frame(height: min(max(210, geometry.size.height - 66), overlay == .browse ? min(500, max(230, CGFloat(store.showingTrash ? store.trashCount : store.activeCount) * 66 + 144)) : 410))
+                    .frame(height: min(max(210, geometry.size.height - 66), overlay == .browse ? browserHeight : ModalLayout.settingsHeight))
                     .background { ModalSurface() }
                     .clipShape(RoundedRectangle(cornerRadius: ModalStyle.cornerRadius))
                     .overlay {
@@ -98,7 +117,10 @@ struct WorkspaceView: View {
         .onChange(of: state.findQuery) { _, value in editor.find(value) }
         .onChange(of: store.selectedID) { _, _ in if state.findVisible { editor.find(state.findQuery) } }
         .onChange(of: formattingVisible) { _, visible in editor.showFormatting(visible) }
-        .onChange(of: store.query) { _, _ in state.browseSelection = store.visibleNotes.first?.id }
+        .onChange(of: store.query) { _, _ in
+            state.browseSelectionUsesKeyboard = true
+            state.browseSelection = store.visibleNotes.first?.id
+        }
         .onExitCommand {
             if state.overlay != nil { dismissOverlay() }
             else if state.findVisible { state.findVisible = false }
@@ -193,11 +215,12 @@ struct WorkspaceView: View {
     }
 
     private func footer(_ note: Note) -> some View {
-        HStack(spacing: 8) {
+        let wordCount = note.plainText.split(whereSeparator: \.isWhitespace).count
+        return HStack(spacing: 8) {
             Circle().fill(store.saveError == nil ? (store.isSaving ? JotTheme.mutedForeground : Color.green.opacity(0.6)) : .orange).frame(width: 4, height: 4)
                 .help(store.saveError != nil ? "Couldn’t save" : store.isSaving ? "Saving…" : "Saved on this Mac")
             Spacer()
-            Text("\(note.plainText.split(whereSeparator: \.isWhitespace).count) words").font(.system(size: 11)).monospacedDigit()
+            Text("\(wordCount.formatted()) \(wordCount == 1 ? "word" : "words")").font(.system(size: 11)).monospacedDigit()
             Spacer()
             Button { formattingVisible.toggle() } label: { JotIcon("type") }
                 .buttonStyle(QuietButtonStyle()).help("Formatting").accessibilityLabel("Toggle formatting toolbar")
@@ -220,121 +243,112 @@ struct WorkspaceView: View {
                 Button { dismissOverlay() } label: { JotIcon("x") }.buttonStyle(QuietButtonStyle()).accessibilityLabel("Close Browse Notes")
             }.padding(.horizontal, 17).padding(.vertical, 14)
             Rectangle().fill(JotTheme.border).frame(height: 1)
-            HStack {
-                Text(store.showingTrash ? "Recently deleted" : "Notes").font(.system(size: 12, weight: .semibold))
-                Spacer()
-                Text(browseCountLabel).font(.system(size: 11)).monospacedDigit()
-            }.foregroundStyle(JotTheme.mutedForeground).padding(.horizontal, 19).padding(.top, 14).padding(.bottom, 8)
-            ScrollViewReader { scroll in
-                ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(store.visibleNotes) { note in
-                            browserRow(note).id(note.id)
+            ZStack(alignment: .top) {
+                NativeNotesBrowser(store: store, state: state, choose: { choose($0) },
+                    requestPermanentDeletion: { pendingDeletion = $0 }, move: moveBrowseSelection, dismiss: dismissOverlay)
+                if store.visibleNotes.isEmpty {
+                    VStack(spacing: 9) {
+                        JotIcon("file-text", size: 24)
+                        Text(store.query.isEmpty ? "No notes here yet" : "No matching notes").font(ModalTypography.label)
+                        if !store.query.isEmpty {
+                            Button("Clear search") { store.query = ""; state.focusSearchToken += 1 }.buttonStyle(.link)
                         }
-                        if store.visibleNotes.isEmpty {
-                            VStack(spacing: 9) {
-                                JotIcon("file-text", size: 24)
-                                Text(store.query.isEmpty ? "No notes here yet" : "No matching notes").font(.system(size: 13))
-                                if !store.query.isEmpty {
-                                    Button("Clear search") { store.query = ""; state.focusSearchToken += 1 }.buttonStyle(.link)
-                                }
-                            }.foregroundStyle(JotTheme.mutedForeground).frame(maxWidth: .infinity).padding(.vertical, 35)
-                        }
-                    }.padding(.horizontal, 9).padding(.bottom, 10)
+                    }.foregroundStyle(JotTheme.mutedForeground).frame(maxWidth: .infinity)
+                        .padding(.vertical, 24).padding(.top, ModalLayout.sectionHeaderHeight + 4)
                 }
-                .onChange(of: state.browseSelection) { _, id in if let id { scroll.scrollTo(id, anchor: .center) } }
             }
             Rectangle().fill(JotTheme.border).frame(height: 1)
             HStack {
                 Button {
                     store.showingTrash.toggle(); store.query = ""
+                    state.browseSelectionUsesKeyboard = true
                     state.browseSelection = store.visibleNotes.first?.id
                 } label: { Label(store.showingTrash ? "All notes" : "Recently deleted", jotIcon: store.showingTrash ? "arrow-left" : "trash-2") }
                     .buttonStyle(QuietButtonStyle())
                 Spacer()
                 Text("↑↓ navigate  ↩ open").foregroundStyle(JotTheme.mutedForeground)
-            }.font(.system(size: 10)).padding(.horizontal, 10).padding(.vertical, 6)
+            }.font(ModalTypography.caption).padding(.horizontal, 10).padding(.vertical, 6)
         }
         .onAppear {
+            state.browseSelectionUsesKeyboard = true
             state.browseSelection = store.visibleNotes.contains(where: { $0.id == store.selectedID }) ? store.selectedID : store.visibleNotes.first?.id
         }
-    }
-
-    private func browserRow(_ note: Note) -> some View {
-        HStack(spacing: 8) {
-            Button { choose(note.id) } label: {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(note.displayTitle).font(.system(size: 14, weight: .medium)).lineLimit(1)
-                    HStack(spacing: 5) {
-                        if store.selectedID == note.id { Circle().fill(JotTheme.sidebarPrimary).frame(width: 5, height: 5) }
-                        Text("\(store.selectedID == note.id ? "Current" : "Edited " + note.modifiedAt.formatted(.dateTime.month(.abbreviated).day())) · \(note.plainText.count.formatted()) characters\(note.pinned ? " · Pinned" : "")")
-                            .font(.system(size: 11)).foregroundStyle(state.browseSelection == note.id ? JotTheme.foreground : JotTheme.mutedForeground).lineLimit(1)
-                    }
-                }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-            }.buttonStyle(.plain)
-            if note.isDeleted {
-                Button { store.restore(note.id) } label: { JotIcon("undo-2") }.buttonStyle(QuietButtonStyle()).help("Restore note").accessibilityLabel("Restore note")
-                Button { pendingDeletion = note.id } label: { JotIcon("trash-2") }.buttonStyle(QuietButtonStyle()).help("Delete permanently").accessibilityLabel("Delete permanently")
-            } else {
-                Button { store.togglePin(note.id) } label: { JotIcon("pin") }
-                    .buttonStyle(QuietButtonStyle()).help(note.pinned ? "Unpin note" : "Pin note").accessibilityLabel(note.pinned ? "Unpin note" : "Pin note")
-                    .background(note.pinned ? JotTheme.accent : .clear, in: RoundedRectangle(cornerRadius: JotTheme.smallRadius))
-                Button { state.trashNote?(note.id) } label: { JotIcon("trash-2") }.buttonStyle(QuietButtonStyle()).help("Move to recently deleted").accessibilityLabel("Move to recently deleted")
-            }
-        }.padding(.horizontal, 12).padding(.vertical, 12)
-            .background(state.browseSelection == note.id ? JotTheme.accent : .clear, in: RoundedRectangle(cornerRadius: JotTheme.radius))
-            .contextMenu {
-                if !note.isDeleted {
-                    Button(note.pinned ? "Unpin" : "Pin", jotIcon: "pin") { store.togglePin(note.id) }
-                    Button("Move to Recently Deleted", jotIcon: "trash-2", role: .destructive) { state.trashNote?(note.id) }
-                }
-            }
     }
 
     private var settings: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("Settings").font(.system(size: 17, weight: .semibold))
+                Text("Settings").font(ModalTypography.title)
                 Spacer()
                 Button { dismissOverlay() } label: { JotIcon("x") }.buttonStyle(QuietButtonStyle()).accessibilityLabel("Close Settings")
-            }.padding(.horizontal, 21).padding(.top, 17).padding(.bottom, 12)
+            }.padding(.horizontal, ModalLayout.settingsInset).padding(.top, 17).padding(.bottom, 12)
             Rectangle().fill(JotTheme.border).frame(height: 1)
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+                VStack(alignment: .leading, spacing: ModalLayout.settingsSectionSpacing) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("QUICK CAPTURE").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundStyle(JotTheme.mutedForeground)
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Global shortcut").font(.system(size: 13, weight: .medium))
-                                Text("Show or hide Jot from any app.").font(.system(size: 11)).foregroundStyle(JotTheme.mutedForeground)
-                            }
-                            Spacer(minLength: 10)
+                        settingsSectionTitle("Quick capture")
+                        settingsRow("Global shortcut", detail: "Show or hide Jot from any app.") {
                             Button { state.configureShortcut?() } label: {
-                                Text(state.shortcutLabel).font(.system(size: 13, weight: .medium)).monospaced()
+                                HStack(spacing: ModalLayout.shortcutSpacing) {
+                                    ForEach(Array(ShortcutPresentation.keycaps(for: state.shortcutLabel).enumerated()), id: \.offset) { _, key in
+                                        Text(key).frame(minWidth: 14)
+                                    }
+                                }
+                                    .font(ModalTypography.shortcut)
                                     .padding(.horizontal, 11).padding(.vertical, 8)
                                     .background(JotTheme.secondary, in: RoundedRectangle(cornerRadius: JotTheme.smallRadius))
                                     .overlay { RoundedRectangle(cornerRadius: JotTheme.smallRadius).stroke(JotTheme.input, lineWidth: 1) }
-                            }.buttonStyle(.plain).help("Change keyboard shortcut").accessibilityLabel("Change global keyboard shortcut")
+                            }
+                            .buttonStyle(ShortcutButtonStyle())
+                            .help("Change keyboard shortcut")
+                            .accessibilityLabel("Change global keyboard shortcut")
+                            .accessibilityValue(state.shortcutLabel)
                         }
                         if let notice = state.notice {
-                            Text(notice).font(.system(size: 11)).foregroundStyle(.orange)
+                            Text(notice).font(ModalTypography.caption).lineSpacing(ModalTypography.descriptionLineSpacing).foregroundStyle(.orange)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     }
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("WINDOW").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundStyle(JotTheme.mutedForeground)
-                        Toggle("Keep above other windows", isOn: Binding(get: { state.alwaysOnTop }, set: { if $0 != state.alwaysOnTop { state.toggleFloating?() } }))
-                        Toggle("Automatically fit note height", isOn: Binding(get: { state.autoFit }, set: { value in state.autoFit = value; if value { state.fitWindow?() } }))
-                    }.font(.system(size: 12)).toggleStyle(.switch).controlSize(.small)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("APPEARANCE").font(.system(size: 9, weight: .semibold)).tracking(1).foregroundStyle(JotTheme.mutedForeground)
-                        HStack { Text("Dark").font(.system(size: 13)); Spacer(); JotIcon("check") }
+                        settingsSectionTitle("Window")
+                        settingsRow("Keep above other windows") {
+                            Toggle("Keep above other windows", isOn: Binding(get: { state.alwaysOnTop }, set: { if $0 != state.alwaysOnTop { state.toggleFloating?() } }))
+                                .labelsHidden().accessibilityLabel("Keep above other windows")
+                        }
+                        settingsRow("Automatically fit note height") {
+                            Toggle("Automatically fit note height", isOn: Binding(get: { state.autoFit }, set: { value in state.autoFit = value; if value { state.fitWindow?() } }))
+                                .labelsHidden().accessibilityLabel("Automatically fit note height")
+                        }
                     }
-                    Text("Notes stay on this Mac and save automatically. Keep Jot running in the menu bar to use the global shortcut.")
-                        .font(.system(size: 11)).foregroundStyle(JotTheme.mutedForeground).fixedSize(horizontal: false, vertical: true)
-                }.padding(22)
+                    .toggleStyle(.switch).controlSize(.small)
+                    Text("Keep Jot running to use the shortcut. Notes save automatically on this Mac.")
+                        .font(ModalTypography.caption).lineSpacing(ModalTypography.descriptionLineSpacing)
+                        .foregroundStyle(JotTheme.mutedForeground).fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(ModalLayout.settingsInset)
             }
         }
+    }
+
+    private func settingsSectionTitle(_ title: String) -> some View {
+        Text(title).font(ModalTypography.section).foregroundStyle(JotTheme.mutedForeground)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private func settingsRow<Control: View>(_ title: String, detail: String? = nil, @ViewBuilder control: () -> Control) -> some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(ModalTypography.label)
+                if let detail {
+                    Text(detail).font(ModalTypography.caption).lineSpacing(ModalTypography.descriptionLineSpacing)
+                        .foregroundStyle(JotTheme.mutedForeground)
+                }
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            control().fixedSize()
+        }.frame(minHeight: ModalLayout.settingsRowHeight)
     }
 
     private func open(_ overlay: WorkspaceOverlay) {
@@ -350,16 +364,16 @@ struct WorkspaceView: View {
         store.select(id); state.overlay = nil; editor.focus()
     }
 
-    private var browseCountLabel: String {
-        let count = store.visibleNotes.count
-        return store.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "\(count.formatted()) \(count == 1 ? "note" : "notes")"
-            : "\(count.formatted()) \(count == 1 ? "result" : "results")"
+    private var browserHeight: CGFloat {
+        let rows = store.visibleNotes.isEmpty ? ModalLayout.emptyResultsHeight : Double(store.visibleNotes.count) * (ModalLayout.noteRowHeight + 3)
+        let headers = Double(store.browserSections.count) * ModalLayout.sectionHeaderHeight
+        return min(ModalLayout.maximumBrowserHeight, max(ModalLayout.minimumBrowserHeight, rows + headers + ModalLayout.browserChromeHeight))
     }
 
     private func moveBrowseSelection(_ direction: Int) {
         let notes = store.visibleNotes
         guard !notes.isEmpty else { return }
+        state.browseSelectionUsesKeyboard = true
         let current = notes.firstIndex(where: { $0.id == state.browseSelection }) ?? 0
         state.browseSelection = notes[min(notes.count - 1, max(0, current + direction))].id
     }

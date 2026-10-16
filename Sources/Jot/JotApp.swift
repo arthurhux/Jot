@@ -11,6 +11,24 @@ final class NotesPanel: NSPanel {
     var shortcut: ((NSEvent) -> Bool)?
     override func cancelOperation(_ sender: Any?) { escape?() }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // A nonactivating panel can keep another app's menu bar. Route standard
+        // native field-editor commands locally instead of depending on that menu.
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if let fieldEditor = firstResponder as? NSTextView, fieldEditor.isFieldEditor,
+           modifiers.contains(.command), modifiers.intersection([.control, .option]).isEmpty,
+           let key = event.charactersIgnoringModifiers?.lowercased() {
+            let shifted = modifiers.contains(.shift)
+            switch key {
+            case "a" where !shifted: fieldEditor.selectAll(nil); return true
+            case "c" where !shifted: fieldEditor.copy(nil); return true
+            case "x" where !shifted && fieldEditor.isEditable: fieldEditor.cut(nil); return true
+            case "v" where !shifted && fieldEditor.isEditable: fieldEditor.paste(nil); return true
+            case "z" where fieldEditor.isEditable:
+                if shifted { fieldEditor.undoManager?.redo() } else { fieldEditor.undoManager?.undo() }
+                return true
+            default: break
+            }
+        }
         if shortcut?(event) == true { return true }
         return super.performKeyEquivalent(with: event)
     }
@@ -20,10 +38,23 @@ final class NotesPanel: NSPanel {
 enum JotApp {
     @MainActor static func main() {
         let application = NSApplication.shared
+#if DEBUG
+        if ProcessInfo.processInfo.arguments.contains("--break-ui") || Bundle.main.object(forInfoDictionaryKey: "JotBreakUILab") as? Bool == true {
+            let lab = BreakUILabDelegate()
+            application.delegate = lab
+            application.appearance = NSAppearance(named: .darkAqua)
+            application.setActivationPolicy(.regular)
+            application.run()
+            withExtendedLifetime(lab) {}
+            return
+        }
+#endif
         let delegate = AppDelegate()
         application.delegate = delegate
         application.appearance = NSAppearance(named: .darkAqua)
-        application.setActivationPolicy(.regular)
+        // Remain available through the status item and hotkey without a Dock
+        // or Command-Tab entry. Accessory apps can still present our panel.
+        application.setActivationPolicy(.accessory)
         application.run()
         withExtendedLifetime(delegate) {}
     }
@@ -236,7 +267,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             return
         }
         if !registerShortcut(quickShortcut) {
-            state.notice = "The shortcut \(quickShortcut.label) is in use. Choose another under Jot → Settings."
+            state.notice = "The shortcut \(quickShortcut.label) is in use. Choose another in Settings."
         }
     }
 
@@ -371,6 +402,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 guard !notes.isEmpty else { return true }
                 let current = notes.firstIndex(where: { $0.id == state.browseSelection }) ?? 0
                 let next = min(notes.count - 1, max(0, current + (event.keyCode == 125 ? 1 : -1)))
+                state.browseSelectionUsesKeyboard = true
                 state.browseSelection = notes[next].id
                 return true
             }

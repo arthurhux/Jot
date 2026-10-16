@@ -13,6 +13,24 @@ struct RecordedShortcut: Equatable {
     )
 }
 
+enum ShortcutPresentation {
+    /// Keep named keys such as Space and F12 intact, separating only modifiers.
+    static func keycaps(for label: String) -> [String] {
+        var keys: [String] = []
+        var remainder = label[...]
+        while let first = remainder.first, "⌃⌥⇧⌘".contains(first) {
+            keys.append(String(first))
+            remainder.removeFirst()
+        }
+        if !remainder.isEmpty { keys.append(String(remainder)) }
+        return keys
+    }
+
+    static func spacedLabel(_ label: String) -> String {
+        keycaps(for: label).joined(separator: "  ")
+    }
+}
+
 @MainActor
 enum ShortcutRecorderPresenter {
     static func present(
@@ -23,7 +41,7 @@ enum ShortcutRecorderPresenter {
         let alert = NSAlert()
         alert.alertStyle = .informational
         alert.messageText = "Keyboard Shortcut"
-        alert.informativeText = "Show or hide Jot from any app. Press a key together with Control, Option, or Command.\n\nCurrent shortcut: \(currentLabel)"
+        alert.informativeText = "Show or hide Jot from any app. Press a key together with Control, Option, or Command.\n\nCurrent shortcut: \(ShortcutPresentation.spacedLabel(currentLabel))"
         let save = alert.addButton(withTitle: "Save")
         save.isEnabled = false
         // Return and Escape are recorded only when modified. While the recorder
@@ -133,7 +151,7 @@ private final class ShortcutRecorderView: NSView {
         if flags.contains(.command) { carbon |= UInt32(cmdKey); glyphs += "⌘" }
         let recorded = RecordedShortcut(keyCode: UInt32(event.keyCode), carbonModifiers: carbon, label: glyphs + key)
         shortcut = recorded
-        keyLabel.stringValue = recorded.label
+        keyLabel.stringValue = ShortcutPresentation.spacedLabel(recorded.label)
         hintLabel.stringValue = "Click Save, or press a different shortcut."
         hintLabel.textColor = .secondaryLabelColor
         setAccessibilityValue(recorded.label)

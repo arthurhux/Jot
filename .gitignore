@@ -8,6 +8,8 @@ Assets/AppIcon.iconset/
 # Local design reviews and private development configuration.
 INTERFACE_REVIEW.md
 MODAL_REVIEW.md
+BREAK_UI_REVIEW.md
+SWIFT_REVIEW.md
 .env
 .env.*
 *.p12

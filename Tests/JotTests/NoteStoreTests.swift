@@ -13,6 +13,42 @@ final class NoteStoreTests: XCTestCase {
         return directory
     }
 
+    func testBrowserGroupsPinnedNotesAfterFilteringAndKeepsNavigationOrder() throws {
+        let directory = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = NoteStore(directory: directory)
+        let pinned = store.createNote()
+        store.updateTitle(id: pinned, title: "Launch PinOnlyFixtureZeta")
+        store.togglePin(pinned)
+        let regular = store.createNote()
+        store.updateTitle(id: regular, title: "Launch RegularOnlyFixtureZeta")
+
+        XCTAssertEqual(store.browserSections.map(\.kind), [.pinned, .notes])
+        XCTAssertEqual(store.browserSections.first?.notes.map(\.id), [pinned])
+        XCTAssertEqual(store.browserSections.flatMap(\.notes).map(\.id), store.visibleNotes.map(\.id))
+
+        store.query = "Launch"
+        XCTAssertEqual(store.browserSections.flatMap(\.notes).map(\.id), [pinned, regular])
+        store.query = "PinOnlyFixtureZeta"
+        XCTAssertEqual(store.browserSections.map(\.kind), [.pinned])
+        store.query = "RegularOnlyFixtureZeta"
+        XCTAssertEqual(store.browserSections.map(\.kind), [.notes])
+        XCTAssertEqual(store.browserSections.first?.notes.map(\.id), [regular])
+        store.query = "No matching note"
+        XCTAssertEqual(store.browserSections.map(\.kind), [.notes])
+        XCTAssertTrue(store.browserSections.first?.notes.isEmpty == true)
+
+        store.query = ""
+        store.togglePin(pinned)
+        XCTAssertEqual(store.browserSections.map(\.kind), [.notes])
+        store.togglePin(pinned)
+        store.moveToTrash(pinned)
+        XCTAssertEqual(store.browserSections.map(\.kind), [.notes])
+        store.showingTrash = true
+        XCTAssertEqual(store.browserSections.map(\.kind), [.trash])
+        XCTAssertEqual(store.browserSections.first?.notes.map(\.id), [pinned])
+    }
+
     func testLibraryKeepsOneHundredNotesAcrossSaveAndReload() throws {
         let directory = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }
