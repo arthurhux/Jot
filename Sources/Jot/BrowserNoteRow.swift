@@ -17,9 +17,10 @@ struct BrowserNoteRow: View {
                         Text(note.displayTitle).font(ModalTypography.noteTitle).lineLimit(1).help(note.displayTitle)
                         HStack(spacing: 5) {
                             if store.selectedID == note.id {
-                                Circle().fill(JotTheme.sidebarPrimary).frame(width: 5, height: 5)
-                            }
-                            Text(metadata(note))
+if store.selectedID == note.id {
+    Circle().fill(JotTheme.sidebarPrimary).frame(width: 5, height: 5)
+        .accessibilityHidden(true) // decoration only; state communicated on the button below
+}
                                 .font(ModalTypography.caption).monospacedDigit()
                                 .foregroundStyle(isSelected ? JotTheme.foreground : JotTheme.mutedForeground)
                                 .lineLimit(1)
