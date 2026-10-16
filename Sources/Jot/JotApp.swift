@@ -51,6 +51,7 @@ enum JotApp {
 #endif
         let delegate = AppDelegate()
         application.delegate = delegate
+        // Jot currently ships one dark theme shared by native and web surfaces.
         application.appearance = NSAppearance(named: .darkAqua)
         // Remain available through the status item and hotkey without a Dock
         // or Command-Tab entry. Accessory apps can still present our panel.

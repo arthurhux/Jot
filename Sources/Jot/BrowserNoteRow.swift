@@ -18,6 +18,7 @@ struct BrowserNoteRow: View {
                         HStack(spacing: 5) {
                             if store.selectedID == note.id {
                                 Circle().fill(JotTheme.sidebarPrimary).frame(width: 5, height: 5)
+                                    .accessibilityHidden(true)
                             }
                             Text(metadata(note))
                                 .font(ModalTypography.caption).monospacedDigit()
@@ -28,6 +29,8 @@ struct BrowserNoteRow: View {
                     .frame(maxWidth: .infinity, minHeight: ModalLayout.noteRowHeight, alignment: .leading)
                     .contentShape(Rectangle())
                 }.buttonStyle(.plain)
+                    .accessibilityLabel(note.displayTitle)
+                    .accessibilityValue(metadata(note))
                 HStack(spacing: 8) {
                     if note.isDeleted {
                         Button { store.restore(note.id) } label: { JotIcon("undo-2") }

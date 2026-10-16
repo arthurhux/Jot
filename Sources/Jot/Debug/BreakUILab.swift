@@ -220,6 +220,10 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
                             try? await Task.sleep(nanoseconds: 150_000_000)
                             let metrics = try? await js("""
                             (() => ({viewport:innerWidth, count:document.getElementById('find-count').textContent,
+                                inputFocused:document.activeElement===document.getElementById('\(bar)-input'),
+                                focusVisible:document.getElementById('\(bar)-input').matches(':focus-visible'),
+                                focusOutline:getComputedStyle(document.getElementById('\(bar)-input')).outlineStyle,
+                                focusOutlineWidth:getComputedStyle(document.getElementById('\(bar)-input')).outlineWidth,
                                 hidden:document.getElementById('\(bar)-bar').hidden,
                                 buttons:[...document.querySelectorAll('#\(bar)-bar button')].map(e => {
                                     const r=e.getBoundingClientRect(), style=getComputedStyle(e);

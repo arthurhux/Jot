@@ -19,7 +19,7 @@ The controls offer Demo data, Worst case, Empty, One, 1,284 notes, and Read erro
 | --- | --- |
 | Notes browser | Stable identities through pin/unpin and filtering; separate pinned/ordinary/trash sections; arrow/Return navigation; complete native accessibility collection; first/last-note actions; virtualization |
 | Search | Displayed `Untitled` fallback, blank/whitespace titles, body and Markdown, diacritic-aware matching, active/trash filtering |
-| Editor controls | Find count/actions and link address/Apply/Remove/Cancel at 320, 360, 480, and screen-wide widths, at 100% and 200% WebKit zoom |
+| Editor controls | Find count/actions and link address/Apply/Remove/Cancel at 320, 360, 480, and screen-wide widths, at 100% and 200% WebKit zoom; visible keyboard focus on both inputs |
 | Metadata | Singular word/note/character counts, localized numbers, older date years, New Year time-zone boundary |
 | Content and storage | Save/reload of every dataset, Unicode/emoji, long titles/URLs, literal code, a 172,740-character transcript, read-only trash, unreadable-file preservation |
 
