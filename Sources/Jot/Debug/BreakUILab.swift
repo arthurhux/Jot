@@ -216,6 +216,11 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
                     for magnified in [false, true] {
                         zoom = magnified; applyEnvironment()
                         for bar in ["link", "find"] {
+                            // WebKit suppresses :focus-visible in an inactive
+                            // window even when document.activeElement is set.
+                            panel.makeKeyAndOrderFront(nil)
+                            NSApp.activate(ignoringOtherApps: true)
+                            if let webView = editor.webView { panel.makeFirstResponder(webView) }
                             _ = try? await js(bar == "link" ? "window.jot.runCommand('link')" : "document.getElementById('link-close').click(); document.getElementById('show-find').click(); window.jot.find('Decision')")
                             try? await Task.sleep(nanoseconds: 150_000_000)
                             let metrics = try? await js("""
