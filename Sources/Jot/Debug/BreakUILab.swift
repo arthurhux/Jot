@@ -240,7 +240,11 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
                     }
                 }
                 for address in ["example.com", "mailto:hello@example.com", "tel:+15555550100", "javascript:alert(1)"] {
-                    let value = String(data: try! JSONEncoder().encode(address), encoding: .utf8)!
+                    guard let encoded = try? JSONEncoder().encode(address),
+                          let value = String(data: encoded, encoding: .utf8) else {
+                        results.append(["check": "Link address validation", "error": "Could not encode address fixture"])
+                        continue
+                    }
                     let metrics = try? await js("""
                     (() => {
                         window.jot.runCommand('link');
