@@ -168,6 +168,7 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     func audit() async {
         guard !isAuditing else { return }
         isAuditing = true
+        controls.orderOut(nil)
         defer { isAuditing = false }
         var results: [[String: Any]] = []
         for scenario in BreakUIDataset.allCases {
@@ -216,12 +217,18 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
                     for magnified in [false, true] {
                         zoom = magnified; applyEnvironment()
                         for bar in ["link", "find"] {
+                            if bar == "find" {
+                                _ = try? await js("document.getElementById('link-close').click()")
+                                // Tiptap restores editor focus on its next frame.
+                                // Let that finish before opening the next field.
+                                try? await Task.sleep(nanoseconds: 50_000_000)
+                            }
                             // WebKit suppresses :focus-visible in an inactive
                             // window even when document.activeElement is set.
-                            panel.makeKeyAndOrderFront(nil)
                             NSApp.activate(ignoringOtherApps: true)
+                            panel.makeKeyAndOrderFront(nil)
                             if let webView = editor.webView { panel.makeFirstResponder(webView) }
-                            _ = try? await js(bar == "link" ? "window.jot.runCommand('link')" : "document.getElementById('link-close').click(); document.getElementById('show-find').click(); window.jot.find('Decision')")
+                            _ = try? await js(bar == "link" ? "window.jot.runCommand('link')" : "document.getElementById('show-find').click(); window.jot.find('Decision')")
                             try? await Task.sleep(nanoseconds: 150_000_000)
                             let metrics = try? await js("""
                             (() => ({viewport:innerWidth, count:document.getElementById('find-count').textContent,
