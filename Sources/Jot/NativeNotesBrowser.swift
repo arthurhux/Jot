@@ -27,6 +27,8 @@ enum BrowserListItem: Equatable, Identifiable {
 struct NativeNotesBrowser: NSViewRepresentable {
     @ObservedObject var store: NoteStore
     @ObservedObject var state: AppState
+    /// Hosted cells don't inherit SwiftUI's environment, so pass it through.
+    var surface: SurfaceStyle = .classic
     let choose: (UUID) -> Void
     let requestPermanentDeletion: (UUID) -> Void
     let move: (Int) -> Void
@@ -40,6 +42,11 @@ struct NativeNotesBrowser: NSViewRepresentable {
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
+        // A knob with no track, inset from the card's rounded corners. The
+        // scroller style still follows System Settings › Show scroll bars.
+        scroll.verticalScroller = CardScroller()
+        scroll.scrollerKnobStyle = .light
+        scroll.scrollerInsets = NSEdgeInsets(top: 6, left: 0, bottom: 8, right: 2)
         scroll.automaticallyAdjustsContentInsets = false
         scroll.contentInsets = NSEdgeInsets(top: 4, left: 9, bottom: 10, right: 9)
         let table = NotesTableView()
@@ -192,7 +199,7 @@ struct NativeNotesBrowser: NSViewRepresentable {
         }
 
         private func content(for row: Int) -> BrowserCellContent {
-            BrowserCellContent(item: rows[row], store: parent.store, state: parent.state,
+            BrowserCellContent(item: rows[row], store: parent.store, state: parent.state, surface: parent.surface,
                 choose: parent.choose, requestPermanentDeletion: parent.requestPermanentDeletion)
         }
     }
@@ -202,6 +209,7 @@ private struct BrowserCellContent: View {
     let item: BrowserListItem
     @ObservedObject var store: NoteStore
     @ObservedObject var state: AppState
+    let surface: SurfaceStyle
     let choose: (UUID) -> Void
     let requestPermanentDeletion: (UUID) -> Void
 
@@ -226,6 +234,7 @@ private struct BrowserCellContent: View {
         .foregroundStyle(JotTheme.foreground)
         .tint(JotTheme.primary)
         .environment(\.colorScheme, .dark)
+        .environment(\.surfaceStyle, surface)
         .id(item.id)
     }
 
@@ -250,6 +259,13 @@ private final class BrowserTableCell: NSTableCellView {
         ])
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+}
+
+/// Draws only the knob, so the list's scroller sits on the card without a
+/// darker track beside the rows.
+private final class CardScroller: NSScroller {
+    override class var isCompatibleWithOverlayScrollers: Bool { true }
+    override func drawKnobSlot(in slotRect: NSRect, highlight flag: Bool) {}
 }
 
 private final class BrowserTableRow: NSTableRowView {

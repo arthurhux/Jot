@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Mac App Store entitlements. Jot needs only:
+  - App Sandbox (required for every Mac App Store app, guideline 2.4.5(i)).
+  - Read/write access to files the person picks in Import/Export panels.
+  - Outgoing network client: WebKit's helper processes need it to load the
+    bundled editor at all. Verified on macOS 27.0.1: without it the sandboxed
+    editor never becomes ready (smoke test times out); with it the full smoke
+    test passes. Jot itself makes no network requests; web links in notes
+    open in the default browser through NSWorkspace.
+  Notes live in the app container's Application Support folder. No camera,
+  contacts, location, or other entitlement is requested.
+  scripts/build-app-store.sh adds the team and application identifiers when
+  JOT_TEAM_ID is set for a distribution build.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

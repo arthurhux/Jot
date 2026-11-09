@@ -8,21 +8,22 @@ struct BrowserNoteRow: View {
     @ObservedObject var state: AppState
     let choose: (UUID) -> Void
     let requestPermanentDeletion: (UUID) -> Void
+    @Environment(\.surfaceStyle) private var surface
 
     var body: some View {
         if let note = store.notes.first(where: { $0.id == noteID }) {
             HStack(spacing: 8) {
                 Button { choose(note.id) } label: {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(note.displayTitle).font(ModalTypography.noteTitle).lineLimit(1).help(note.displayTitle)
+                        Text(note.displayTitle).font(state.usesReferenceTypography ? ModalTypography.referenceNoteTitle : ModalTypography.noteTitle).lineLimit(1).help(note.displayTitle)
                         HStack(spacing: 5) {
                             if store.selectedID == note.id {
                                 Circle().fill(JotTheme.sidebarPrimary).frame(width: 5, height: 5)
                                     .accessibilityHidden(true)
                             }
                             Text(metadata(note))
-                                .font(ModalTypography.caption).monospacedDigit()
-                                .foregroundStyle(isSelected ? JotTheme.foreground : JotTheme.mutedForeground)
+                                .font(state.usesReferenceTypography ? ModalTypography.referenceMetadata : ModalTypography.caption.monospacedDigit())
+                                .foregroundStyle(isSelected && !state.usesReferenceTypography ? JotTheme.foreground : JotTheme.mutedForeground)
                                 .lineLimit(1)
                         }
                     }
@@ -46,13 +47,15 @@ struct BrowserNoteRow: View {
                     }
                 }
                 .opacity(isSelected ? 1 : 0)
+                .animation(highlightAnimation, value: isSelected)
                 .allowsHitTesting(isSelected)
                 .disabled(!isSelected)
                 .accessibilityHidden(!isSelected)
             }
             .padding(.horizontal, 12)
             .frame(minHeight: ModalLayout.noteRowHeight)
-            .background(isSelected ? JotTheme.accent : .clear, in: RoundedRectangle(cornerRadius: JotTheme.radius))
+            .background(isSelected ? surface.selectedFill : .clear, in: RoundedRectangle(cornerRadius: JotTheme.radius))
+            .animation(highlightAnimation, value: isSelected)
             .contentShape(RoundedRectangle(cornerRadius: JotTheme.radius))
             .onHover { inside in
                 if inside {
@@ -60,8 +63,13 @@ struct BrowserNoteRow: View {
                     state.browseSelection = note.id
                 }
             }
+            // Every hover-only action is also in the context menu (HIG Pointing
+            // devices: hidden controls need another way in).
             .contextMenu {
-                if !note.isDeleted {
+                if note.isDeleted {
+                    Button("Restore", jotIcon: "undo-2") { store.restore(note.id) }
+                    Button("Delete Permanently…", jotIcon: "trash-2", role: .destructive) { requestPermanentDeletion(note.id) }
+                } else {
                     Button(note.pinned ? "Unpin" : "Pin", jotIcon: note.pinned ? "pin-off" : "pin") { store.togglePin(note.id) }
                     Button("Move to Recently Deleted", jotIcon: "trash-2", role: .destructive) { state.trashNote?(note.id) }
                 }
@@ -70,6 +78,12 @@ struct BrowserNoteRow: View {
     }
 
     private var isSelected: Bool { state.browseSelection == noteID }
+
+    /// Pointer hover fades the highlight (tens of times a day: fast and
+    /// subtle). Keyboard selection moves it instantly.
+    private var highlightAnimation: Animation? {
+        state.browseSelectionUsesKeyboard ? nil : MotionTokens.hover
+    }
 
     private func metadata(_ note: Note) -> String {
         let status = store.selectedID == note.id ? "Current" : "Edited " + BrowserNoteDate.formatted(note.modifiedAt)

@@ -28,6 +28,10 @@ The current bundle is suitable for local testing. A download from GitHub will be
 
 An explicitly labeled unnotarized preview can be shared with testers who understand the limitation. Depending on their Mac's policy, they may be able to approve that specific app in **System Settings → Privacy & Security → Open Anyway** after the first launch attempt. Managed Macs may prevent this. See [Apple's opening instructions](https://support.apple.com/en-us/102445). Do not ask users to disable Gatekeeper or remove system security protections as an installation step.
 
+## Mac App Store
+
+The Mac App Store build is sandboxed and separate from the DMG. `./scripts/build-app-store.sh` builds `dist/AppStore/Jot.app` with the App Store entitlements and privacy manifest. It signs ad hoc by default, for local testing; signing variables produce a submission package. See [Mac App Store readiness](AppStore/README.md) for the audit, what was verified, and the remaining steps, including moving existing notes into the sandbox container.
+
 ## Preparing a normal public release
 
 1. Choose a project license and retain the notices for bundled dependencies. Keep signing certificates and credentials outside the repository.

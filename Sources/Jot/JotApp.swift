@@ -10,6 +10,45 @@ final class NotesPanel: NSPanel {
     var escape: (() -> Void)?
     var shortcut: ((NSEvent) -> Bool)?
     override func cancelOperation(_ sender: Any?) { escape?() }
+
+    /// An empty unified toolbar gives the titlebar the system toolbar height,
+    /// so the window controls sit vertically centered on Jot's own toolbar row.
+    /// Returns the titlebar height and the space the window controls occupy.
+    /// Fades the close, minimize, and zoom buttons with the rest of the chrome.
+    func setWindowControlsVisible(_ visible: Bool) {
+        let buttons = [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton].compactMap { standardWindowButton($0) }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = MotionTokens.chromeDuration
+            buttons.forEach { $0.animator().alphaValue = visible ? 1 : 0 }
+        }
+    }
+
+    /// Installs `view` as the content with larger continuous (squircle) corners
+    /// than the system window shape. The window is clear, so everything outside
+    /// the rounded layer is transparent and the shadow follows the new shape.
+    func setRoundedContent(_ view: NSView) {
+        view.wantsLayer = true
+        view.layer?.cornerRadius = WindowShape.cornerRadius
+        view.layer?.cornerCurve = .continuous
+        view.layer?.masksToBounds = true
+        contentView = view
+        invalidateShadow()
+    }
+
+    @discardableResult
+    func adoptToolbarTitlebar(into state: AppState) -> (height: CGFloat, leading: CGFloat) {
+        let toolbar = NSToolbar(identifier: "JotTitlebar")
+        toolbar.allowsUserCustomization = false
+        toolbar.displayMode = .iconOnly
+        self.toolbar = toolbar
+        toolbarStyle = .unified
+        titlebarSeparatorStyle = .none
+        let height = max(28, frame.height - contentLayoutRect.height)
+        let controlsEnd = standardWindowButton(.zoomButton)?.frame.maxX ?? 66
+        state.titlebarHeight = height
+        state.titlebarLeadingInset = controlsEnd + 12
+        return (height, controlsEnd + 12)
+    }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // A nonactivating panel can keep another app's menu bar. Route standard
         // native field-editor commands locally instead of depending on that menu.
@@ -32,6 +71,21 @@ final class NotesPanel: NSPanel {
         if shortcut?(event) == true { return true }
         return super.performKeyEquivalent(with: event)
     }
+}
+
+/// Reports when the pointer enters or leaves a view, even while another app
+/// is active, so Jot can show its controls on hover like Raycast.
+@MainActor
+final class PointerTracker: NSResponder {
+    private let changed: (Bool) -> Void
+    init(view: NSView, changed: @escaping (Bool) -> Void) {
+        self.changed = changed
+        super.init()
+        view.addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self, userInfo: nil))
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
+    override func mouseEntered(with event: NSEvent) { changed(true) }
+    override func mouseExited(with event: NSEvent) { changed(false) }
 }
 
 @main
@@ -78,6 +132,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     private var allowUnsavedQuit = false
     private var terminationAttempt = UUID()
     private var smokeRunner: SmokeTestRunner?
+    private var pointerTracker: PointerTracker?
 
     override init() {
         let testDirectory = ProcessInfo.processInfo.environment["JOT_DATA_DIR"].map { URL(fileURLWithPath: $0, isDirectory: true) }
@@ -116,7 +171,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel = NotesPanel(contentRect: NSRect(origin: .zero, size: state.compact ? NSSize(width: 480, height: 560) : librarySize), styleMask: [.titled, .closable, .miniaturizable, .resizable, .nonactivatingPanel, .fullSizeContentView], backing: .buffered, defer: false)
         panel.title = "Jot"
         panel.appearance = NSAppearance(named: .darkAqua)
-        panel.backgroundColor = JotTheme.nsBackground
+        // SwiftUI's WindowBackdrop paints the background: a translucent window
+        // material with Liquid Glass (macOS 26+), the opaque theme elsewhere.
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
         panel.titlebarAppearsTransparent = true
         panel.isMovableByWindowBackground = true
         panel.titleVisibility = .hidden
@@ -129,10 +187,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         panel.minSize = NSSize(width: 360, height: 280)
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .canJoinAllApplications, .fullScreenDisallowsTiling]
         panel.delegate = self
+        panel.adoptToolbarTitlebar(into: state)
         let content = NSHostingView(rootView: WorkspaceView(store: store, state: state, editor: editor))
         // The panel controls sizing; SwiftUI must not replace its constraints.
         content.sizingOptions = []
-        panel.contentView = content
+        panel.setRoundedContent(content)
+        pointerTracker = PointerTracker(view: content) { [weak self] inside in self?.state.pointerInside = inside }
         panel.center()
         panel.setFrameAutosaveName("JotNotesWindow")
         panel.minSize = NSSize(width: 360, height: 280)
@@ -157,6 +217,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         state.hideWindow = { [weak self] in self?.hideWindow() }
         state.trashNote = { [weak self] id in self?.moveToTrash(id) }
         state.configureShortcut = { [weak self] in self?.changeShortcut(nil) }
+        state.setWindowControlsVisible = { [weak self] visible in self?.panel.setWindowControlsVisible(visible) }
         state.overlayDidChange = { [weak self] overlay in
             guard let self else { return }
             self.editor.setModalPresented(overlay != nil)
@@ -204,7 +265,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         addMenu(editMenu, to: menu)
 
         let formatMenu = NSMenu(title: "Format")
-        for (title, command, key) in [("Bold", "toggleBold", "b"), ("Italic", "toggleItalic", "i"), ("Strikethrough", "toggleStrike", ""), ("Inline Code", "toggleCode", ""), ("Bullet List", "toggleBulletList", ""), ("Numbered List", "toggleOrderedList", ""), ("Checklist", "toggleTaskList", ""), ("Code Block", "toggleCodeBlock", "")] {
+        for (title, command, key) in [("Bold", "toggleBold", "b"), ("Italic", "toggleItalic", "i"), ("Strikethrough", "toggleStrike", ""), ("Inline Code", "toggleCode", ""), ("Link…", "link", "k"), ("Bullet List", "toggleBulletList", ""), ("Numbered List", "toggleOrderedList", ""), ("Checklist", "toggleTaskList", ""), ("Code Block", "toggleCodeBlock", "")] {
             let entry = item(title, #selector(formatNote(_:)), key: key)
             entry.representedObject = command
             formatMenu.addItem(entry)
@@ -213,6 +274,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
         let viewMenu = NSMenu(title: "View")
         viewMenu.addItem(item("Browse Notes", #selector(browseNotes(_:)), key: "p"))
+        viewMenu.addItem(item("Actions…", #selector(showActions(_:)), key: "j"))
         viewMenu.addItem(item("Compact Window", #selector(toggleCompact(_:)), key: "m", modifiers: [.command, .shift]))
         viewMenu.addItem(item("Keep Window on Top", #selector(toggleFloating(_:)), key: "p", modifiers: [.command, .shift]))
         viewMenu.addItem(item("Fit Window to Note", #selector(fitWindow(_:))))
@@ -328,6 +390,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         state.showSearch()
     }
     @objc func browseNotes(_ sender: Any?) { searchNotes(sender) }
+    @objc func showActions(_ sender: Any?) {
+        showWindow(sender)
+        editor.cancelLink()
+        state.actionsQuery = ""; state.actionSelection = 0
+        state.overlay = .actions
+        state.focusSearchToken += 1
+    }
     @objc func showSettings(_ sender: Any?) { showWindow(sender); state.overlay = .settings }
     @objc func findInNote(_ sender: Any?) { state.overlay = nil; state.findVisible = true }
     @objc func trashNote(_ sender: Any?) { if let id = store.selectedID { moveToTrash(id) } }
@@ -362,7 +431,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     private func resizeToContent(animate: Bool) {
         let maxHeight = min(760.0, (panel.screen?.visibleFrame.height ?? 900) - 60)
-        let height = min(maxHeight, max(300, lastEditorHeight + 135))
+        // Title, footer, and titlebar chrome around the editor's content height.
+        let height = min(maxHeight, max(300, lastEditorHeight + 140 + max(0, state.titlebarHeight - 42)))
         resizeWindow(to: NSSize(width: 480, height: height), animate: animate)
     }
 
@@ -384,7 +454,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     private func escape() {
-        if state.overlay != nil { state.overlay = nil; editor.focus() }
+        if editor.linkRequest != nil { editor.cancelLink() }
+        else if state.overlay != nil { state.overlay = nil; editor.focus() }
         else if state.findVisible { state.findVisible = false }
         else if !store.query.isEmpty { store.query = ""; editor.focus() }
         else { hideWindow() }
@@ -420,16 +491,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         case "m" where shifted: toggleCompact(nil)
         case "p" where shifted: toggleFloating(nil)
         case "p" where !shifted: browseNotes(nil)
+        case "j" where !shifted: showActions(nil)
         case "," where !shifted: showSettings(nil)
         case "e" where shifted: exportNote(nil)
         case "o" where !shifted: importNote(nil)
         case "w" where !shifted: hideWindow()
         case "q" where !shifted: NSApplication.shared.terminate(nil)
         case "\u{08}", "\u{7F}": trashNote(nil)
-        case "b", "i", "z":
+        case "b", "i", "k", "z":
             guard let responder = panel.firstResponder as? NSView, let webView = editor.webView,
                   responder === webView || responder.isDescendant(of: webView) else { return false }
-            editor.command(key == "b" ? "toggleBold" : key == "i" ? "toggleItalic" : shifted ? "redo" : "undo")
+            editor.command(key == "b" ? "toggleBold" : key == "i" ? "toggleItalic" : key == "k" ? "link" : shifted ? "redo" : "undo")
         default: return false
         }
         return true
@@ -475,10 +547,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     @objc func about(_ sender: Any?) {
-        NSApplication.shared.orderFrontStandardAboutPanel(options: [.applicationName: "Jot", .applicationVersion: "1.0", .credits: NSAttributedString(string: "A little room to think.\nNotes saved on your Mac.")])
+        // Let AppKit read the version and build from Info.plist so About always
+        // matches the submitted binary.
+        NSApplication.shared.orderFrontStandardAboutPanel(options: [.applicationName: "Jot", .credits: NSAttributedString(string: "A little room to think.\nNotes saved on your Mac.")])
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool { hideWindow(); return false }
+    func windowDidBecomeKey(_ notification: Notification) { state.windowIsKey = true }
+    func windowDidResignKey(_ notification: Notification) { state.windowIsKey = false }
     func windowWillStartLiveResize(_ notification: Notification) { if state.compact { state.autoFit = false } }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showWindow(nil); return true }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
