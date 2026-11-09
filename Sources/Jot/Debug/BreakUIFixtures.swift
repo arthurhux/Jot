@@ -2,7 +2,7 @@
 import Foundation
 
 enum BreakUIDataset: String, CaseIterable, Identifiable {
-    case demo = "Demo data", worst = "Worst case", empty = "Empty", one = "One", huge = "1,284 notes", corrupt = "Read error"
+    case demo = "Demo data", showcase = "Showcase", worst = "Worst case", empty = "Empty", one = "One", huge = "1,284 notes", corrupt = "Read error"
     var id: String { rawValue }
 
     func notes() -> [Note] {
@@ -20,6 +20,26 @@ enum BreakUIDataset: String, CaseIterable, Identifiable {
         switch self {
         case .empty, .corrupt: return []
         case .one: return [note("J", "J", index: 0)]
+        case .showcase:
+            // Rich Markdown for README and release screenshots. No document
+            // JSON, so the editor parses the Markdown itself.
+            func rich(_ title: String, _ markdown: String, index: Int, pinned: Bool = false) -> Note {
+                Note(title: title, titleIsAutomatic: false, document: "", plainText: markdown, markdown: markdown,
+                     createdAt: date.addingTimeInterval(-Double(index) * 86_400),
+                     modifiedAt: date.addingTimeInterval(-Double(index) * 86_400), pinned: pinned)
+            }
+            return [rich("Weekend in Lisbon", """
+                Flights land Friday at **9:40**. Pick up the museum passes on the way in.
+
+                - [x] Book the tram tour
+                - [x] Reserve dinner by the river
+                - [ ] Download offline maps
+                - [ ] Pack the film camera
+
+                > Ask Rita about the bakery near the castle.
+                """, index: 0, pinned: true),
+                    rich("Reading list", "- *The Design of Everyday Things*\n- *Thinking in Systems*", index: 1),
+                    rich("Product ideas", "Quick capture from anywhere, then sort later.", index: 2)]
         case .demo:
             return [note("Launch checklist", "Confirm the release date.\nAsk Jo to review the installation guide.", index: 0, pinned: true),
                     note("Friday ideas", "A little room to think.\nKeep the capture flow quick.", index: 1),
