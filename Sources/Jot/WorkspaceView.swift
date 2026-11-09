@@ -32,6 +32,7 @@ enum MotionTokens {
 /// button shows its state with its background). At least 28×28 pt, the macOS
 /// default control size. Highlights are capsules on glass, rounded elsewhere.
 struct QuietButtonStyle: ButtonStyle {
+    @Environment(\.secondaryText) private var secondaryText
     var isOn = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.surfaceStyle) private var surface
@@ -43,7 +44,7 @@ struct QuietButtonStyle: ButtonStyle {
         let fill: Color = configuration.isPressed ? surface.pressedFill
             : isOn ? surface.selectedFill : hovered ? surface.hoverFill : .clear
         return configuration.label
-            .foregroundStyle(isOn || hovered || configuration.isPressed ? JotTheme.foreground : JotTheme.mutedForeground)
+            .foregroundStyle(isOn || hovered || configuration.isPressed ? JotTheme.foreground : secondaryText)
             .padding(6)
             .frame(minWidth: GlassTokens.controlSize, minHeight: GlassTokens.controlSize)
             .background(fill, in: surface.highlightShape)
@@ -75,13 +76,14 @@ struct ToolbarItemStyle: ButtonStyle {
 }
 
 struct ToolbarItemChrome: ViewModifier {
+    @Environment(\.secondaryText) private var secondaryText
     let hovered: Bool
     var pressed = false
     @Environment(\.surfaceStyle) private var surface
 
     func body(content: Content) -> some View {
         content
-            .foregroundStyle(hovered || pressed ? JotTheme.foreground : JotTheme.mutedForeground)
+            .foregroundStyle(hovered || pressed ? JotTheme.foreground : secondaryText)
             .frame(width: GlassTokens.toolbarItemWidth, height: GlassTokens.controlSize)
             .background(pressed ? surface.pressedFill : hovered ? surface.hoverFill : .clear, in: surface.highlightShape)
             .contentShape(Rectangle())
@@ -114,6 +116,28 @@ struct WorkspaceView: View {
     @State private var pendingDeletion: UUID?
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorSchemeContrast) private var colorContrast
+
+    /// Jot looks active (darker, controls shown) while key, hovered, or showing a modal.
+    private var looksActive: Bool { state.windowIsKey || state.pointerInside || state.overlay != nil }
+    private var increasedContrast: Bool { colorContrast == .increased || state.forcesIncreasedContrast }
+    private var backdropTransparency: Double {
+        let value = state.windowAppearance.transparency(active: looksActive)
+        return increasedContrast ? min(WindowAppearance.increasedContrastTransparency, value) : value
+    }
+    /// Secondary text for this window state: AA over the translucent window,
+    /// the theme gray when opaque, full white with Increase Contrast.
+    private var secondaryTone: NSColor {
+        if increasedContrast { return NSColor(JotTheme.foreground) }
+        return surface.translucentWindow ? state.windowAppearance.secondaryText(transparency: backdropTransparency) : NSColor(JotTheme.mutedForeground)
+    }
+    private var secondaryText: Color { Color(nsColor: secondaryTone) }
+    private var modalSecondaryText: Color { Color(nsColor: modalSecondaryTone) }
+    /// Glass and frosted modal cards sit lighter than the window.
+    private var modalSecondaryTone: NSColor {
+        if increasedContrast { return NSColor(JotTheme.foreground) }
+        return surface.translucentWindow ? state.windowAppearance.secondaryText(transparency: backdropTransparency, inModal: true) : NSColor(JotTheme.mutedForeground)
+    }
 
     /// Liquid Glass on macOS 26+, the shipped look on 14–15, opaque surfaces
     /// with Reduce Transparency. The UI Lab can preview the others.
@@ -137,7 +161,7 @@ struct WorkspaceView: View {
                     }
                     if let notice = state.notice {
                         HStack(spacing: 8) {
-                            JotIcon("info", color: JotTheme.mutedForeground)
+                            JotIcon("info", color: secondaryText)
                             Text(notice).font(.system(size: 11))
                             Spacer()
                             Button { state.notice = nil } label: { JotIcon("x") }
@@ -165,6 +189,7 @@ struct WorkspaceView: View {
                     // Stay clear of the titlebar and the footer.
                     .frame(height: min(max(210, geometry.size.height - state.titlebarHeight - 64), modalHeight(overlay)))
                     .modifier(ModalCard(style: surface))
+                    .environment(\.secondaryText, Color(nsColor: modalSecondaryTone))
                     .padding(.top, 20)
                     .accessibilityElement(children: .contain)
                     .accessibilityLabel(overlay == .browse ? "Browse Notes" : overlay == .settings ? "Settings" : "Actions")
@@ -172,9 +197,10 @@ struct WorkspaceView: View {
                     .transition(modalTransition)
                 }
             }
-            .background { WindowBackdrop(style: surface, appearance: state.windowAppearance, active: state.windowIsKey || state.pointerInside) }
+            .background { WindowBackdrop(style: surface, appearance: state.windowAppearance, transparency: backdropTransparency) }
         }
         .environment(\.surfaceStyle, surface)
+        .environment(\.secondaryText, secondaryText)
         .transformEnvironment(\.controlActiveState) { if state.forcesKeyAppearance { $0 = .key } }
         .foregroundStyle(JotTheme.foreground)
         // Switches, links, and the prominent action use the system accent.
@@ -215,7 +241,7 @@ struct WorkspaceView: View {
     private var windowToolbar: some View {
         HStack(spacing: 8) {
             Text(store.selectedNote?.displayTitle ?? "Jot")
-                .font(state.usesReferenceTypography ? ModalTypography.referenceWindowTitle : ModalTypography.windowTitle).foregroundStyle(JotTheme.mutedForeground)
+                .font(state.usesReferenceTypography ? ModalTypography.referenceWindowTitle : ModalTypography.windowTitle).foregroundStyle(secondaryText)
                 .lineLimit(1).frame(maxWidth: .infinity)
                 .help(store.selectedNote?.displayTitle ?? "Jot")
             HStack(spacing: 0) {
@@ -244,7 +270,8 @@ struct WorkspaceView: View {
     @ViewBuilder private func noteDetail(width: CGFloat) -> some View {
         if let note = store.selectedNote {
             VStack(spacing: 0) {
-                TextField("Untitled", text: Binding(get: { store.selectedNote?.title ?? "" }, set: { if state.overlay == nil { store.updateTitle(id: note.id, title: $0) } }))
+                TextField("Note title", text: Binding(get: { store.selectedNote?.title ?? "" }, set: { if state.overlay == nil { store.updateTitle(id: note.id, title: $0) } }),
+                          prompt: Text("Untitled").foregroundStyle(secondaryText))
                     .textFieldStyle(.plain).font(ModalTypography.noteHeading).disabled(note.isDeleted)
                     .onSubmit { editor.focus() }.accessibilityLabel("Note title")
                     .help(note.usesAutomaticTitle ? "Named from the opening text. Edit to set your own title." : "Custom title. Choose Use Automatic Title from Actions to name it from the opening text.")
@@ -269,12 +296,12 @@ struct WorkspaceView: View {
                         if !state.findQuery.isEmpty { Text(editor.matchCount == 0 ? "No matches" : "\(editor.matchCount)").font(.system(size: 10)) }
                         Button { editor.nextMatch() } label: { JotIcon("chevron-down") }.buttonStyle(QuietButtonStyle()).accessibilityLabel("Next match")
                         Button { state.findVisible = false } label: { JotIcon("x") }.buttonStyle(QuietButtonStyle()).accessibilityLabel("Close find")
-                    }.font(.system(size: 12)).foregroundStyle(JotTheme.mutedForeground)
+                    }.font(.system(size: 12)).foregroundStyle(secondaryText)
                         .padding(.horizontal, surface == .glass ? 12 : 18).padding(.vertical, 4).modifier(GlassBar(style: surface))
                 }
                 ZStack {
                     // The page never paints its own paper; WindowBackdrop shows through.
-                    NativeEditor(note: note, controller: editor, translucent: true)
+                    NativeEditor(note: note, controller: editor, translucent: true, secondaryHex: secondaryTone.hexString)
                     if let error = editor.failure {
                         VStack(spacing: 12) {
                             JotIcon("triangle-alert", size: 24, color: .orange)
@@ -288,7 +315,7 @@ struct WorkspaceView: View {
             }
         } else {
             VStack(spacing: 14) {
-                JotIcon("square-pen", size: 28).foregroundStyle(JotTheme.mutedForeground)
+                JotIcon("square-pen", size: 28).foregroundStyle(secondaryText)
                 Text("Make space for a thought.").font(.system(size: 20, weight: .medium))
                 Button("New note   ⌘N") { _ = store.createNote() }
                     .modifier(ProminentAction(style: surface))
@@ -302,7 +329,7 @@ struct WorkspaceView: View {
         let saveStatus = store.saveError != nil ? "Couldn’t save" : store.isSaving ? "Saving…" : "Saved on this Mac"
         let stripOpen = usesGlassStrip && state.formattingVisible
         return HStack(spacing: 8) {
-            Circle().fill(store.saveError == nil ? (store.isSaving ? JotTheme.mutedForeground : Color.green.opacity(0.6)) : .orange).frame(width: 4, height: 4)
+            Circle().fill(store.saveError == nil ? (store.isSaving ? secondaryText : Color.green.opacity(0.6)) : .orange).frame(width: 4, height: 4)
                 .help(saveStatus)
                 .accessibilityElement().accessibilityLabel(saveStatus)
             Spacer(minLength: 8)
@@ -316,7 +343,7 @@ struct WorkspaceView: View {
                 .modifier(ChromeFade(visible: state.chromeVisible || state.formattingVisible))
         }
         .animation(MotionTokens.glassFade, value: stripOpen)
-        .foregroundStyle(JotTheme.mutedForeground).padding(.leading, 20).padding(.trailing, usesGlassStrip ? 7 : 12)
+        .foregroundStyle(secondaryText).padding(.leading, 20).padding(.trailing, usesGlassStrip ? 7 : 12)
         .frame(height: usesGlassStrip ? 44 : 35)
         .overlay(alignment: .top) { Rectangle().fill(surface.hairline).frame(height: 1) }
         .accessibilityElement(children: .contain)
@@ -343,8 +370,8 @@ struct WorkspaceView: View {
     private var browseNotes: some View {
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                JotIcon("search", size: 16).foregroundStyle(JotTheme.mutedForeground)
-                NotesSearchField(text: $store.query, focusToken: state.focusSearchToken,
+                JotIcon("search", size: 16).foregroundStyle(modalSecondaryText)
+                NotesSearchField(text: $store.query, focusToken: state.focusSearchToken, placeholderColor: modalSecondaryTone,
                     referenceTypography: state.usesReferenceTypography,
                     submit: { choose(state.browseSelection ?? store.visibleNotes.first?.id, animated: false) },
                     move: moveBrowseSelection, dismiss: { dismissOverlay() })
@@ -356,7 +383,7 @@ struct WorkspaceView: View {
             }.padding(.horizontal, 17).padding(.vertical, 14)
             Rectangle().fill(surface.hairline).frame(height: 1)
             ZStack(alignment: .top) {
-                NativeNotesBrowser(store: store, state: state, surface: surface, choose: { choose($0, animated: true) },
+                NativeNotesBrowser(store: store, state: state, surface: surface, secondaryText: modalSecondaryText, choose: { choose($0, animated: true) },
                     requestPermanentDeletion: { pendingDeletion = $0 }, move: moveBrowseSelection, dismiss: { dismissOverlay() })
                 if store.visibleNotes.isEmpty {
                     VStack(spacing: 9) {
@@ -365,7 +392,7 @@ struct WorkspaceView: View {
                         if !store.query.isEmpty {
                             Button("Clear search") { store.query = ""; state.focusSearchToken += 1 }.buttonStyle(.link)
                         }
-                    }.foregroundStyle(JotTheme.mutedForeground).frame(maxWidth: .infinity)
+                    }.foregroundStyle(modalSecondaryText).frame(maxWidth: .infinity)
                         .padding(.vertical, 24).padding(.top, ModalLayout.sectionHeaderHeight + 4)
                 }
             }
@@ -373,7 +400,7 @@ struct WorkspaceView: View {
             HStack {
                 recentlyDeletedToggle
                 Spacer()
-                Text("↑↓ navigate  ↩ open").foregroundStyle(JotTheme.mutedForeground)
+                Text("↑↓ navigate  ↩ open").foregroundStyle(modalSecondaryText)
                     .accessibilityLabel("Up and Down Arrow move through notes. Return opens the selected note.")
             }.font(ModalTypography.caption).padding(.horizontal, 10).padding(.vertical, 6)
         }
@@ -459,10 +486,12 @@ struct WorkspaceView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Keep Jot running to use the shortcut. Notes save automatically on this Mac, and Jot doesn’t collect any data.")
                             .font(ModalTypography.caption).lineSpacing(ModalTypography.descriptionLineSpacing)
-                            .foregroundStyle(JotTheme.mutedForeground).fixedSize(horizontal: false, vertical: true)
+                            .foregroundStyle(modalSecondaryText).fixedSize(horizontal: false, vertical: true)
                         // App Review 5.1.1(i): the privacy policy is reachable inside the app.
                         if let policy = AppInfo.privacyPolicyURL {
+                            // White plus underline: accent-blue text drops below AA on bright glass.
                             Link("Privacy Policy", destination: policy).font(ModalTypography.caption)
+                                .foregroundStyle(JotTheme.foreground).underline()
                                 .help(policy.absoluteString)
                         }
                     }
@@ -474,7 +503,7 @@ struct WorkspaceView: View {
     }
 
     private func settingsSectionTitle(_ title: String) -> some View {
-        Text(title).font(ModalTypography.section).foregroundStyle(JotTheme.mutedForeground)
+        Text(title).font(ModalTypography.section).foregroundStyle(modalSecondaryText)
             .accessibilityAddTraits(.isHeader)
     }
 
@@ -484,7 +513,7 @@ struct WorkspaceView: View {
                 Text(title).font(ModalTypography.label)
                 if let detail {
                     Text(detail).font(ModalTypography.caption).lineSpacing(ModalTypography.descriptionLineSpacing)
-                        .foregroundStyle(JotTheme.mutedForeground)
+                        .foregroundStyle(modalSecondaryText)
                 }
             }
             .fixedSize(horizontal: false, vertical: true)

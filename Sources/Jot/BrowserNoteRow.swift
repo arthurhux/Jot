@@ -3,6 +3,7 @@ import SwiftUI
 /// Resolve the live note by ID so reparenting between sections cannot retain
 /// an old value for the pin action, title, or metadata.
 struct BrowserNoteRow: View {
+    @Environment(\.secondaryText) private var secondaryText
     let noteID: UUID
     @ObservedObject var store: NoteStore
     @ObservedObject var state: AppState
@@ -23,7 +24,7 @@ struct BrowserNoteRow: View {
                             }
                             Text(metadata(note))
                                 .font(state.usesReferenceTypography ? ModalTypography.referenceMetadata : ModalTypography.caption.monospacedDigit())
-                                .foregroundStyle(isSelected && !state.usesReferenceTypography ? JotTheme.foreground : JotTheme.mutedForeground)
+                                .foregroundStyle(isSelected && !state.usesReferenceTypography ? JotTheme.foreground : secondaryText)
                                 .lineLimit(1)
                         }
                     }

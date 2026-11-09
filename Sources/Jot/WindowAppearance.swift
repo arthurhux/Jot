@@ -54,6 +54,36 @@ struct WindowAppearance: Equatable {
 
     func isPreset(_ hex: String) -> Bool { tone.hexString == NSColor(hex: hex)?.hexString }
 
+    // SECONDARY TEXT · WCAG AA over a translucent window
+    // Measured in the UI Lab over its bright backdrop (90th-percentile
+    // luminance behind text), on Black:
+    //   window   36% → 0.0244   50% → 0.0369   60% → 0.0466   85% → 0.0759
+    //   modal    60% → 0.0722 (glass cards sit about 0.026 lighter)
+    // A line through the window points (slightly conservative) predicts the
+    // window's worst case; modals add the measured offset. Secondary text is
+    // the darkest gray keeping 4.8:1 there (AA is 4.5:1), never darker than
+    // #A1A1A1. Shipped: window 60% → #B0B0B0, modal → #C5C5C5, 85% → #C7C7C7.
+    static let contrastTarget = 4.8
+    static let modalLuminanceOffset = 0.026
+
+    /// Highest background luminance expected behind text at this transparency.
+    func worstBackgroundLuminance(transparency t: Double, inModal: Bool = false) -> Double {
+        let measuredOnBlack = max(0, -0.0156 + 0.1112 * t)
+        let toneLift = max(0, tone.relativeLuminance - 0.003) * (1 - t)
+        return max(tone.relativeLuminance, measuredOnBlack + toneLift) + (inModal ? Self.modalLuminanceOffset : 0)
+    }
+
+    /// Secondary text (captions, counts, hints, placeholders, quiet icons).
+    func secondaryText(transparency t: Double, inModal: Bool = false) -> NSColor {
+        let required = Self.contrastTarget * (worstBackgroundLuminance(transparency: t, inModal: inModal) + 0.05) - 0.05
+        let luminance = min(0.9, max(NSColor(hex: "#A1A1A1")!.relativeLuminance, required))
+        let linear = luminance <= 0.0031308 ? luminance * 12.92 : 1.055 * pow(luminance, 1 / 2.4) - 0.055
+        return NSColor(srgbRed: linear, green: linear, blue: linear, alpha: 1)
+    }
+
+    /// Increase Contrast keeps the window close to opaque.
+    static let increasedContrastTransparency = 0.2
+
     /// Swift source for `standard`, so tuned lab values can be pasted back.
     var swiftLiteral: String {
         String(format: "WindowAppearance(tone: NSColor(hex: \"%@\")!, activeTransparency: %.2f, inactiveTransparency: %.2f)",

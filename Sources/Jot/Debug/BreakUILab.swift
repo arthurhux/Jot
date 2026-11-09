@@ -28,6 +28,10 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
     }
     private var backdrop: NSWindow?
+    /// Preview Increase Contrast (secondary text to white, window near-opaque).
+    @Published var increasedContrast = false {
+        didSet { state?.labIncreasedContrast = increasedContrast }
+    }
     private var pointerTracker: PointerTracker?
     @Published var rtl = false
     @Published var status = "Isolated fixtures · production views · no global shortcut"
@@ -134,6 +138,7 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
         state.trashNote = { [weak self] id in self?.store.moveToTrash(id) }
         state.windowAppearance = WindowAppearance.loadLab()
+        state.labIncreasedContrast = increasedContrast
         state.windowIsKey = panel.isKeyWindow
         state.setWindowControlsVisible = { [weak self] visible in self?.panel.setWindowControlsVisible(visible) }
         state.toggleFloating = { [weak self] in
@@ -268,6 +273,10 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         try? await Task.sleep(nanoseconds: 900_000_000)
         if await captureRetrying(directory.appendingPathComponent("inactive-bright-editor.png")) { written.append("inactive-bright-editor.png") }
         state.labForcesKeyAppearance = true; state.windowIsKey = true
+        increasedContrast = true
+        try? await Task.sleep(nanoseconds: 700_000_000)
+        if await captureRetrying(directory.appendingPathComponent("contrast-bright-editor.png")) { written.append("contrast-bright-editor.png") }
+        increasedContrast = false
         // The glass formatting strip, open at a roomy and at the minimum width.
         if SurfaceStyle.supportsLiquidGlass {
             surfaceStyle = .glass; brightBackdrop = true; surface = "Editor"; showSurface()
@@ -536,6 +545,7 @@ private struct BreakUIControls: View {
                     }
                 }.pickerStyle(.segmented)
                 Toggle("Bright backdrop", isOn: $lab.brightBackdrop)
+                Toggle("Increase Contrast", isOn: $lab.increasedContrast)
                 Toggle("Reference type", isOn: $lab.referenceType)
             }.font(.system(size: 11))
             Text(lab.status).font(.system(size: 10)).foregroundStyle(.secondary).lineLimit(1)

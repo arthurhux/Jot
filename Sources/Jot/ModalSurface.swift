@@ -87,6 +87,7 @@ struct NotesSearchField: NSViewRepresentable {
     @Binding var text: String
     var focusToken: Int
     var placeholder = "Search for notes…"
+    var placeholderColor = NSColor(JotTheme.mutedForeground)
     var label = "Search notes"
     var referenceTypography = false
     var submit: () -> Void
@@ -104,7 +105,6 @@ struct NotesSearchField: NSViewRepresentable {
         field.focusRingType = .none
         field.cell?.focusRingType = .none
         field.textColor = NSColor(JotTheme.foreground)
-        field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: NSColor(JotTheme.mutedForeground)])
         field.cell?.usesSingleLineMode = true
         field.cell?.isScrollable = true
         field.delegate = context.coordinator
@@ -115,6 +115,10 @@ struct NotesSearchField: NSViewRepresentable {
     }
     func updateNSView(_ field: ModalTextField, context: Context) {
         context.coordinator.parent = self
+        if field.placeholderAttributedString?.string != placeholder || context.coordinator.placeholderColor != placeholderColor {
+            context.coordinator.placeholderColor = placeholderColor
+            field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: placeholderColor])
+        }
         let font = referenceTypography ? ModalTypography.referenceSearch : .systemFont(ofSize: 15)
         if field.font != font {
             field.font = font
@@ -143,6 +147,7 @@ struct NotesSearchField: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: NotesSearchField
         var focusToken: Int?
+        var placeholderColor: NSColor?
         init(_ parent: NotesSearchField) { self.parent = parent }
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }

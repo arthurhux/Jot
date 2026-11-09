@@ -12,12 +12,21 @@ final class AppState: ObservableObject {
     /// Snapshots from a background launch can't make the window key; draw
     /// controls as they appear in the key window instead.
     @Published var labForcesKeyAppearance = false
+    /// Preview Increase Contrast without changing System Settings.
+    @Published var labIncreasedContrast = false
 #endif
     var surfaceOverride: SurfaceStyle? {
 #if DEBUG
         labSurface
 #else
         nil
+#endif
+    }
+    var forcesIncreasedContrast: Bool {
+#if DEBUG
+        labIncreasedContrast
+#else
+        false
 #endif
     }
     var forcesKeyAppearance: Bool {

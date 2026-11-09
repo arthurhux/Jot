@@ -16,6 +16,7 @@ struct JotAction: Identifiable {
 /// in the same glass card and motion as Browse Notes. Pointer hover and arrow
 /// keys share one highlight; Return or a click runs the action.
 struct ActionsPalette: View {
+    @Environment(\.secondaryText) private var secondaryText
     @ObservedObject var state: AppState
     let actions: [JotAction]
     /// Runs an action. `animated` is true for pointer-initiated runs.
@@ -44,9 +45,9 @@ struct ActionsPalette: View {
         let showsSections = state.actionsQuery.trimmingCharacters(in: .whitespaces).isEmpty
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                JotIcon("command", size: 16, color: JotTheme.mutedForeground)
+                JotIcon("command", size: 16, color: secondaryText)
                 NotesSearchField(text: $state.actionsQuery, focusToken: state.focusSearchToken,
-                    placeholder: "Search actions…", label: "Search actions",
+                    placeholder: "Search actions…", placeholderColor: NSColor(secondaryText), label: "Search actions",
                     submit: { if items.indices.contains(state.actionSelection) { run(items[state.actionSelection], false) } },
                     move: { move($0, count: items.count) }, dismiss: { dismiss(false) })
                     .frame(maxWidth: .infinity)
@@ -59,7 +60,7 @@ struct ActionsPalette: View {
                     VStack(alignment: .leading, spacing: 2) {
                         ForEach(Array(items.enumerated()), id: \.element.id) { index, action in
                             if showsSections, index == 0 || items[index - 1].section != action.section {
-                                Text(action.section).font(ModalTypography.section).foregroundStyle(JotTheme.mutedForeground)
+                                Text(action.section).font(ModalTypography.section).foregroundStyle(secondaryText)
                                     .padding(.horizontal, 12).frame(height: Self.headerHeight, alignment: .bottomLeading)
                                     .accessibilityAddTraits(.isHeader)
                             }
@@ -69,7 +70,7 @@ struct ActionsPalette: View {
                                 .id(action.id)
                         }
                         if items.isEmpty {
-                            Text("No matching actions").font(ModalTypography.label).foregroundStyle(JotTheme.mutedForeground)
+                            Text("No matching actions").font(ModalTypography.label).foregroundStyle(secondaryText)
                                 .frame(maxWidth: .infinity).padding(.vertical, 24)
                         }
                     }
@@ -84,7 +85,7 @@ struct ActionsPalette: View {
             Rectangle().fill(surface.hairline).frame(height: 1)
             HStack {
                 Spacer()
-                Text("↑↓ navigate  ↩ run").foregroundStyle(JotTheme.mutedForeground)
+                Text("↑↓ navigate  ↩ run").foregroundStyle(secondaryText)
                     .accessibilityLabel("Up and Down Arrow move through actions. Return runs the selected action.")
             }.font(ModalTypography.caption).padding(.horizontal, 14).frame(height: 32)
         }
@@ -98,6 +99,7 @@ struct ActionsPalette: View {
 }
 
 private struct ActionRow: View {
+    @Environment(\.secondaryText) private var secondaryText
     let action: JotAction
     let selected: Bool
     /// Pointer hover fades the highlight; keyboard selection moves instantly.
@@ -109,12 +111,12 @@ private struct ActionRow: View {
     var body: some View {
         Button(action: run) {
             HStack(spacing: 10) {
-                JotIcon(action.icon, color: action.destructive ? JotTheme.destructive : selected ? JotTheme.foreground : JotTheme.mutedForeground)
+                JotIcon(action.icon, color: action.destructive ? JotTheme.destructive : selected ? JotTheme.foreground : secondaryText)
                 Text(action.title).font(ModalTypography.label)
                     .foregroundStyle(action.destructive ? JotTheme.destructive : JotTheme.foreground)
                 Spacer(minLength: 8)
                 if let shortcut = action.shortcut {
-                    Text(shortcut).font(ModalTypography.caption).monospacedDigit().foregroundStyle(JotTheme.mutedForeground)
+                    Text(shortcut).font(ModalTypography.caption).monospacedDigit().foregroundStyle(secondaryText)
                 }
             }
             .padding(.horizontal, 12)

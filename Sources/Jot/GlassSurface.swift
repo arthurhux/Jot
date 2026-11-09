@@ -45,7 +45,17 @@ private struct SurfaceStyleKey: EnvironmentKey {
     static let defaultValue: SurfaceStyle = .classic
 }
 
+private struct SecondaryTextKey: EnvironmentKey {
+    static let defaultValue = JotTheme.mutedForeground
+}
+
 extension EnvironmentValues {
+    /// Captions, counts, hints, placeholders, and quiet icons. Brightened over
+    /// a translucent window to keep WCAG AA (WindowAppearance.secondaryText).
+    var secondaryText: Color {
+        get { self[SecondaryTextKey.self] }
+        set { self[SecondaryTextKey.self] = newValue }
+    }
     var surfaceStyle: SurfaceStyle {
         get { self[SurfaceStyleKey.self] }
         set { self[SurfaceStyleKey.self] = newValue }
@@ -115,16 +125,17 @@ enum JotAccent {
 struct WindowBackdrop: View {
     let style: SurfaceStyle
     let appearance: WindowAppearance
-    /// Darker while Jot is in use, more see-through otherwise.
-    let active: Bool
+    /// Darker while Jot is in use, more see-through otherwise; capped under
+    /// Increase Contrast.
+    let transparency: Double
 
     var body: some View {
         Group {
             if style.translucentWindow {
                 ZStack {
                     WindowMaterial()
-                    appearance.color.opacity(1 - appearance.transparency(active: active))
-                        .animation(MotionTokens.chrome, value: active)
+                    appearance.color.opacity(1 - transparency)
+                        .animation(MotionTokens.chrome, value: transparency)
                 }
             } else {
                 appearance.color
@@ -218,10 +229,11 @@ struct GlassBar: ViewModifier {
 /// The label inside an interactive glass circle. The glass itself supplies the
 /// press response, so this style only sets size, color, and hit shape.
 struct GlassIconButtonStyle: ButtonStyle {
+    @Environment(\.secondaryText) private var secondaryText
     let isOn: Bool
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(isOn ? JotTheme.foreground : JotTheme.mutedForeground)
+            .foregroundStyle(isOn ? JotTheme.foreground : secondaryText)
             .padding(7)
             .contentShape(Circle())
     }

@@ -15,17 +15,23 @@ Audit of Jot against Apple's current guidance, done 9 November 2026 on macOS 27.
 | Accessibility settings may remove or change effects; test custom elements | Reduce Transparency switches every surface to opaque theme colors on all macOS versions. The editor page also drops its translucent class |
 | Builds on earlier systems | macOS 14–15 keep the shipped look: opaque note and frosted modal card |
 
-The window is a near-black tone (`#0A0A0A`) over the blurred desktop. It ships as `WindowAppearance.standard`: 60% transparency while Jot is active, and 85% while another app is active and the pointer is elsewhere. Both values were chosen by eye in the UI Lab. There's no user setting; the UI Lab tunes the values, and its Copy values button produces the Swift. Measured on composited UI Lab snapshots over a bright white, yellow, cyan, and pink backdrop. Muted captions (`#A1A1A1`) need 4.5:1 for WCAG AA:
+The window is a near-black tone (`#0A0A0A`) over the blurred desktop. It ships as `WindowAppearance.standard`: 60% transparency while Jot is active, and 85% while another app is active and the pointer is elsewhere. Both values were chosen by eye in the UI Lab. There's no user setting; the UI Lab tunes the values, and its Copy values button produces the Swift. Measured on composited UI Lab snapshots over a bright white, yellow, cyan, and pink backdrop. The figures use the 90th-percentile luminance behind text. WCAG AA needs 4.5:1 for text up to 17 pt.
 
-| Tone · transparency | Muted captions | Body text |
-| --- | --- | --- |
-| Black · 36% active | 5.46:1 | 13.5:1 |
-| Black · 50% active | 4.68:1 | 11.6:1 |
-| **Black · 60% active (shipped)** | 4.14:1 (below AA) | 10.3:1 |
-| **Black · 85% inactive (shipped)** | 3.15:1 (below AA) | 7.8:1 |
-| Graphite · 50% (an earlier test) | 3.95:1 (fails) | 9.8:1 |
+Secondary text (captions, counts, hints, placeholders, quiet icons) is no longer a fixed `#A1A1A1`. `WindowAppearance.secondaryText` picks the darkest gray that keeps 4.8:1 against the worst background measured for the current transparency. Glass modal cards sit about 0.026 lighter than the window, so they get their own gray. A modal also keeps the darker active backdrop while it's open.
 
-Body text passes AA at both shipped values. Over very bright desktops, muted captions (the word count, section labels, hints) fall below 4.5:1. Most desktops are darker than this test backdrop, but if strict AA matters for these captions, set active to 50% or lower, or brighten the muted color. Inactive Jot, like Raycast, is meant to be glanced at, not read or edited. Hovering or clicking restores the active look within 180 ms. Contrast is not an App Review criterion, but it is part of the HIG's accessibility guidance.
+| Surface (Black) | Background | Secondary text | Body text (#FAFAFA) |
+| --- | --- | --- | --- |
+| Window, 60% active | 0.046 | `#B0B0B0`: 5.05:1 | 11.9:1 |
+| Glass modal, 60% active | 0.072 | `#C5C5C5`: 4.98:1 | 8.2:1 |
+| Window, 85% inactive | 0.076 | `#C7C7C7`: 4.93:1 | 7.9:1 |
+| Increase Contrast | 0.012 | `#FAFAFA`: 16.2:1 | 16.2:1 |
+
+With the old fixed `#A1A1A1`, captions measured 4.14:1 at 60% and 3.15:1 at 85%.
+
+- **Increase Contrast** (System Settings › Accessibility › Display) caps transparency at 20% and makes secondary text white. The editor page's existing `prefers-contrast` styles still apply.
+- **The page's muted text** (placeholder, quotes, done tasks) is set from the same native value.
+- **Links** in Settings stay white with an underline, because accent-blue text measures about 2.4:1 on bright glass.
+- **Lab check:** the UI Lab's Increase Contrast toggle previews the mode, and its snapshot matrix captures it (`contrast-bright-editor.png`).
 
 ## Sizes, spacing, and controls (HIG)
 

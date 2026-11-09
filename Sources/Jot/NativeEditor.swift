@@ -27,6 +27,7 @@ final class EditorController: NSObject, ObservableObject {
     private var searchQuery = ""
     private var modalPresented = false
     private var translucent = false
+    private var secondaryHex: String?
 
     init(store: NoteStore) { self.store = store }
 
@@ -64,6 +65,19 @@ final class EditorController: NSObject, ObservableObject {
         guard value != translucent else { return }
         translucent = value
         applyTranslucency()
+    }
+
+    /// Matches the page's muted text (placeholder, quotes, done tasks) to the
+    /// native secondary text, which is tuned for contrast over the window.
+    func setSecondaryText(_ hex: String) {
+        guard hex != secondaryHex else { return }
+        secondaryHex = hex
+        applySecondaryText()
+    }
+
+    private func applySecondaryText() {
+        guard isReady, let hex = secondaryHex else { return }
+        execute("document.documentElement.style.setProperty('--editor-muted', '\(hex)')")
     }
 
     private func applyTranslucency() {
@@ -129,6 +143,7 @@ final class EditorController: NSObject, ObservableObject {
             failure = nil
             loadedID = nil
             applyTranslucency()
+            applySecondaryText()
             execute("window.jot.setNativeLinkEditor(true)")
             load(pendingNote, dark: dark)
         case "content": applyContent(message)
@@ -174,6 +189,7 @@ struct NativeEditor: NSViewRepresentable {
     var note: Note?
     @ObservedObject var controller: EditorController
     var translucent = false
+    var secondaryHex: String?
     @Environment(\.colorScheme) private var colorScheme
 
     func makeCoordinator() -> Coordinator { Coordinator(controller) }
@@ -196,12 +212,14 @@ struct NativeEditor: NSViewRepresentable {
             controller.failure = "Editor files are missing. Rebuild Jot with scripts/build-app.sh."
         }
         controller.setTranslucent(translucent)
+        if let secondaryHex { controller.setSecondaryText(secondaryHex) }
         controller.load(note, dark: colorScheme == .dark)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
         controller.setTranslucent(translucent)
+        if let secondaryHex { controller.setSecondaryText(secondaryHex) }
         controller.load(note, dark: colorScheme == .dark)
     }
 

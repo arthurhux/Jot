@@ -29,6 +29,7 @@ struct NativeNotesBrowser: NSViewRepresentable {
     @ObservedObject var state: AppState
     /// Hosted cells don't inherit SwiftUI's environment, so pass it through.
     var surface: SurfaceStyle = .classic
+    var secondaryText: Color = JotTheme.mutedForeground
     let choose: (UUID) -> Void
     let requestPermanentDeletion: (UUID) -> Void
     let move: (Int) -> Void
@@ -199,7 +200,7 @@ struct NativeNotesBrowser: NSViewRepresentable {
         }
 
         private func content(for row: Int) -> BrowserCellContent {
-            BrowserCellContent(item: rows[row], store: parent.store, state: parent.state, surface: parent.surface,
+            BrowserCellContent(item: rows[row], store: parent.store, state: parent.state, surface: parent.surface, secondaryText: parent.secondaryText,
                 choose: parent.choose, requestPermanentDeletion: parent.requestPermanentDeletion)
         }
     }
@@ -210,6 +211,7 @@ private struct BrowserCellContent: View {
     @ObservedObject var store: NoteStore
     @ObservedObject var state: AppState
     let surface: SurfaceStyle
+    let secondaryText: Color
     let choose: (UUID) -> Void
     let requestPermanentDeletion: (UUID) -> Void
 
@@ -222,7 +224,7 @@ private struct BrowserCellContent: View {
                     Spacer()
                     Text(countLabel(count)).font(ModalTypography.caption).monospacedDigit()
                 }
-                .foregroundStyle(JotTheme.mutedForeground)
+                .foregroundStyle(secondaryText)
                 .padding(.horizontal, 12)
                 .frame(height: ModalLayout.sectionHeaderHeight)
                 .accessibilityAddTraits(.isHeader)
@@ -235,6 +237,7 @@ private struct BrowserCellContent: View {
         .tint(JotTheme.primary)
         .environment(\.colorScheme, .dark)
         .environment(\.surfaceStyle, surface)
+        .environment(\.secondaryText, secondaryText)
         .id(item.id)
     }
 

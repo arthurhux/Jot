@@ -6,6 +6,7 @@ import SwiftUI
 /// one, and Esc or the close button cancels. Bare domains get https://, and an
 /// email address gets mailto:.
 struct LinkEditor: View {
+    @Environment(\.secondaryText) private var secondaryText
     let request: EditorController.LinkRequest
     @ObservedObject var editor: EditorController
     let surface: SurfaceStyle
@@ -23,7 +24,7 @@ struct LinkEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                JotIcon("link", color: JotTheme.mutedForeground)
+                JotIcon("link", color: secondaryText)
                 TextField("Link address", text: $address, prompt: Text("https://example.com"))
                     .textFieldStyle(.roundedBorder)
                     .focused($focused)
@@ -37,7 +38,7 @@ struct LinkEditor: View {
             HStack(spacing: 8) {
                 Text(invalid ? "Use a web address, email, or phone link." : request.href.isEmpty ? (request.hasSelection ? "Links the selected text." : "Inserts the address as a link.") : "Edits the link at the cursor.")
                     .font(ModalTypography.caption)
-                    .foregroundStyle(invalid ? Color.orange : JotTheme.mutedForeground)
+                    .foregroundStyle(invalid ? Color.orange : secondaryText)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 if !request.href.isEmpty {

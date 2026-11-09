@@ -67,6 +67,7 @@ extension MotionTokens {
 /// slots fit; extra commands move into a final More menu.
 @available(macOS 26, *)
 struct GlassFormattingStrip: View {
+    @Environment(\.secondaryText) private var secondaryText
     @Binding var isExpanded: Bool
     @ObservedObject var editor: EditorController
     let capacity: Int
@@ -136,7 +137,7 @@ struct GlassFormattingStrip: View {
         } label: {
             // AppKit draws a borderless menu label as a template image tinted with
             // the accent; bake in the muted color so it matches its neighbours.
-            JotIcon("ellipsis", color: JotTheme.mutedForeground, preservesColor: true)
+            JotIcon("ellipsis", color: secondaryText, preservesColor: true)
         }
             .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize()
             .frame(width: GlassTokens.glassIconSize, height: GlassTokens.glassIconSize)
