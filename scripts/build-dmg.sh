@@ -11,6 +11,7 @@ Usage: scripts/build-dmg.sh [--skip-build | --skip-editor]
 
 Build Jot and create a compressed, read-only DMG with an Applications shortcut.
 --skip-build packages the existing dist/Jot.app without rebuilding it.
+Set JOT_APP_PATH to build and package an app at another path.
 --skip-editor rebuilds the native app using existing editor resources.
 This does not perform Developer ID signing or Apple notarization.
 EOF
@@ -34,7 +35,9 @@ if [[ "$SKIP_BUILD" == false ]]; then
   "$PROJECT_ROOT/scripts/build-app.sh" ${BUILD_ARGUMENTS[@]+"${BUILD_ARGUMENTS[@]}"}
 fi
 
-APP_PATH="$PROJECT_ROOT/dist/Jot.app"
+# JOT_APP_PATH builds and packages an app elsewhere (for example while
+# dist/Jot.app is running); build-app.sh honors the same variable.
+APP_PATH="${JOT_APP_PATH:-$PROJECT_ROOT/dist/Jot.app}"
 if [[ ! -d "$APP_PATH" ]]; then
   printf 'Missing dist/Jot.app. Run this script without --skip-build.\n' >&2
   exit 1
