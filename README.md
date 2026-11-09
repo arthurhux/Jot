@@ -2,6 +2,10 @@
 
 A small, local-first notes app for macOS. Capture an idea in a floating window, keep a checklist beside your work, and browse notes in a searchable modal. Jot is an independent app inspired by the convenience of quick notes; it does not use Raycast code or services.
 
+<p align="center">
+  <img src="docs/images/jot-1.1.png" width="608" alt="Jot 1.1 on macOS: a translucent, near-black note window titled Weekend in Lisbon with a checklist, and a row of Liquid Glass formatting buttons along the bottom.">
+</p>
+
 **[Download the macOS preview DMG](https://github.com/arthurhux/Jot/releases/tag/v1.1.0-preview.1)** · Apple silicon · macOS 14+
 
 This preview is ad hoc signed and has not been notarized by Apple. macOS may block the first launch; see [Apple's instructions](https://support.apple.com/en-us/102445) for approving a specific app that you trust. Intel builds and automatic updates are not included yet.

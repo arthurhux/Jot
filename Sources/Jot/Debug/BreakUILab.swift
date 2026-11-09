@@ -28,6 +28,9 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
     }
     private var backdrop: NSWindow?
+    /// A soft gradient instead of the bright stress backdrop, for screenshots.
+    @Published var showcaseBackdrop = false { didSet { updateBackdrop() } }
+    private var backdropIsShowcase: Bool?
     /// Preview Increase Contrast (secondary text to white, window near-opaque).
     @Published var increasedContrast = false {
         didSet { state?.labIncreasedContrast = increasedContrast }
@@ -106,7 +109,9 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         }
         controls.orderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        if let directory = arguments.first(where: { $0.hasPrefix("--snapshot-dir=") })?.dropFirst("--snapshot-dir=".count) {
+        if let path = arguments.first(where: { $0.hasPrefix("--hero=") })?.dropFirst("--hero=".count) {
+            auditTask = Task { [weak self] in await self?.heroCapture(URL(fileURLWithPath: String(path))) }
+        } else if let directory = arguments.first(where: { $0.hasPrefix("--snapshot-dir=") })?.dropFirst("--snapshot-dir=".count) {
             auditTask = Task { [weak self] in await self?.snapshotMatrix(into: URL(fileURLWithPath: String(directory), isDirectory: true)) }
         } else if ProcessInfo.processInfo.arguments.contains("--audit") {
             auditTask = Task { [weak self] in await self?.audit() }
@@ -186,10 +191,13 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
             let window = NSWindow(contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
             window.isReleasedWhenClosed = false
             window.ignoresMouseEvents = true
-            window.contentView = NSHostingView(rootView: BrightBackdrop())
             backdrop = window
             return window
         }()
+        if backdropIsShowcase != showcaseBackdrop {
+            backdropIsShowcase = showcaseBackdrop
+            window.contentView = showcaseBackdrop ? NSHostingView(rootView: ShowcaseBackdrop()) : NSHostingView(rootView: BrightBackdrop())
+        }
         window.setFrame(panel.frame.insetBy(dx: -140, dy: -90), display: true)
         window.order(.below, relativeTo: panel.windowNumber)
     }
@@ -213,7 +221,7 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
     }
 
     @discardableResult
-    func writeSnapshot(to url: URL) -> Bool {
+    func writeSnapshot(to url: URL, margin: CGFloat = 0) -> Bool {
         typealias CreateImage = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
         guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return false }
         let create = unsafeBitCast(symbol, to: CreateImage.self)
@@ -222,7 +230,8 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
         // bright backdrop). Other apps' windows appear only with Screen Recording
         // permission; this app's own windows always do.
         let screenHeight = NSScreen.screens.first?.frame.maxY ?? panel.frame.maxY
-        let rect = CGRect(x: panel.frame.minX, y: screenHeight - panel.frame.maxY, width: panel.frame.width, height: panel.frame.height)
+        let frame = panel.frame.insetBy(dx: -margin, dy: -margin)
+        let rect = CGRect(x: frame.minX, y: screenHeight - frame.maxY, width: frame.width, height: frame.height)
         let options = CGWindowListOption([.optionOnScreenBelowWindow, .optionIncludingWindow]).rawValue
         guard let image = create(rect, options, CGWindowID(panel.windowNumber), CGWindowImageOption.bestResolution.rawValue)?.takeRetainedValue(),
               let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else {
@@ -234,14 +243,45 @@ final class BreakUILabDelegate: NSObject, NSApplicationDelegate, NSWindowDelegat
 
     /// Retries while the window server catches up (for example right after
     /// launch or an app switch), so a matrix run doesn't silently lose frames.
-    private func captureRetrying(_ url: URL) async -> Bool {
+    private func captureRetrying(_ url: URL, margin: CGFloat = 0) async -> Bool {
         for attempt in 0..<5 {
             if NSApp.isHidden { NSApp.unhide(nil) }
             if !panel.isVisible { panel.orderFrontRegardless() }
-            if writeSnapshot(to: url) { return true }
+            if writeSnapshot(to: url, margin: margin) { return true }
             try? await Task.sleep(nanoseconds: UInt64(200_000_000 * (attempt + 1)))
         }
         return false
+    }
+
+    /// --hero=<path.png>: the Showcase notes on a soft backdrop with the glass
+    /// formatting strip open, captured with the window's shadow and a margin
+    /// for the README. Also writes <path>-browse.png (Browse Notes), then quits.
+    func heroCapture(_ url: URL) async {
+        isAuditing = true
+        load(.showcase)
+        surfaceStyle = SurfaceStyle.supportsLiquidGlass ? .glass : .classic
+        showcaseBackdrop = true; brightBackdrop = true
+        state.labForcesKeyAppearance = true; state.windowIsKey = true
+        surface = "Editor"; showSurface()
+        var frame = panel.frame
+        frame.size = NSSize(width: 480, height: 540)
+        panel.setFrame(frame, display: true); updateBackdrop()
+        _ = await waitForEditor(editor, hasNote: true)
+        try? await Task.sleep(nanoseconds: 800_000_000)
+        editor.focus()
+        if ProcessInfo.processInfo.arguments.contains("--dump-dom"),
+           let html = try? await editor.webView?.evaluateJavaScript("document.querySelector('.tiptap ul')?.outerHTML.slice(0, 900) ?? 'none'") as? String {
+            FileHandle.standardError.write(Data("DOM: \(html)\n".utf8))
+        }
+        controls.orderOut(nil)
+        state.formattingVisible = true
+        try? await Task.sleep(nanoseconds: 1_400_000_000)
+        _ = await captureRetrying(url, margin: 64)
+        state.formattingVisible = false
+        surface = "Notes"; showSurface()
+        try? await Task.sleep(nanoseconds: 900_000_000)
+        _ = await captureRetrying(url.deletingPathExtension().appendingPathExtension("browse.png"), margin: 64)
+        NSApp.terminate(nil)
     }
 
     /// --snapshot-dir=<path>: every surface style × Editor/Notes/Settings, plus
@@ -594,6 +634,18 @@ private struct LabAppearanceControls: View {
     private func update(_ change: (inout WindowAppearance) -> Void) {
         change(&state.windowAppearance)
         state.windowAppearance.saveLab()
+    }
+}
+
+/// A calm gradient, like a desktop picture, for README and release images.
+private struct ShowcaseBackdrop: View {
+    var body: some View {
+        ZStack {
+            LinearGradient(colors: [Color(red: 0.16, green: 0.20, blue: 0.48), Color(red: 0.42, green: 0.24, blue: 0.56), Color(red: 0.93, green: 0.52, blue: 0.40)],
+                           startPoint: .topLeading, endPoint: .bottomTrailing)
+            Circle().fill(Color(red: 0.36, green: 0.72, blue: 0.95).opacity(0.55)).frame(width: 420).blur(radius: 90).offset(x: -220, y: -200)
+            Circle().fill(Color(red: 1.0, green: 0.78, blue: 0.45).opacity(0.5)).frame(width: 380).blur(radius: 100).offset(x: 240, y: 220)
+        }
     }
 }
 

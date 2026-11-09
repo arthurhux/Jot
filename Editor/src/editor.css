@@ -87,10 +87,12 @@ button:disabled, select:disabled { opacity: .35; }
 .tiptap ul, .tiptap ol { margin: .7em 0; padding-left: 1.6em; }
 .tiptap li > p { margin: .15em 0; }
 .tiptap ul[data-type="taskList"] { list-style: none; padding: 0; }
-.tiptap li[data-type="taskItem"] { display: flex; align-items: flex-start; gap: 9px; }
-.tiptap li[data-type="taskItem"] > label { flex: 0 0 auto; user-select: none; display: flex; align-items: center; height: 29px; }
-.tiptap li[data-type="taskItem"] > label input { width: 14px; height: 14px; margin: 0; accent-color: var(--editor-accent); cursor: pointer; }
-.tiptap li[data-type="taskItem"] > div { flex: 1; min-width: 0; }
+/* Tiptap's task node view renders <li data-checked> without data-type, so
+ * select items through their list. */
+.tiptap ul[data-type="taskList"] > li { display: flex; align-items: flex-start; gap: 9px; position: relative; }
+.tiptap ul[data-type="taskList"] > li > label { flex: 0 0 auto; user-select: none; display: flex; align-items: center; height: 1.62em; }
+.tiptap ul[data-type="taskList"] > li > label input { width: 14px; height: 14px; margin: 0; accent-color: var(--editor-accent); cursor: pointer; }
+.tiptap ul[data-type="taskList"] > li > div { flex: 1; min-width: 0; }
 .tiptap li[data-checked="true"] > div > p { color: var(--editor-muted); text-decoration: line-through; }
 .tiptap p.is-editor-empty:first-child::before { color: var(--editor-muted); content: attr(data-placeholder); float: left; height: 0; pointer-events: none; }
 ::selection { background: var(--selection); }
