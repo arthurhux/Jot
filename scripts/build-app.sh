@@ -11,6 +11,7 @@ Usage: scripts/build-app.sh [--skip-editor]
 Builds the editor and a locally signed release app at dist/Jot.app.
 Use --skip-editor only when Sources/Jot/Resources/Editor is already built.
 Set JOT_BUILD_DIR to override the default temporary Swift build directory.
+Set JOT_APP_PATH to write the app somewhere other than dist/Jot.app.
 EOF
 }
 
@@ -55,7 +56,7 @@ fi
 
 swift build -c release --scratch-path "$SCRATCH_PATH" --disable-sandbox
 BINARY_DIRECTORY="$(swift build -c release --scratch-path "$SCRATCH_PATH" --show-bin-path --disable-sandbox)"
-APP_PATH="$PROJECT_ROOT/dist/Jot.app"
+APP_PATH="${JOT_APP_PATH:-$PROJECT_ROOT/dist/Jot.app}"
 STAGING_DIRECTORY="$(mktemp -d "$TEMPORARY_ROOT/jot-package.XXXXXX")"
 STAGING_PATH="$STAGING_DIRECTORY/Jot.app"
 trap 'rm -rf "$STAGING_DIRECTORY"' EXIT

@@ -231,10 +231,20 @@ function setEditable(value) {
   formatting()
 }
 
+// When the native app provides its own link field, `link` asks it to open
+// instead of showing the in-page link bar.
+let nativeLinkEditor = false
+
+function requestLink() {
+  const editor = current?.editor
+  if (!editor?.isEditable) return
+  post({ type: 'linkRequest', id: current.id, href: editor.getAttributes('link').href || '', hasSelection: !editor.state.selection.empty })
+}
+
 function runCommand(name, value) {
   if (!current || !current.editor.isEditable) return false
   const editor = current.editor
-  if (name === 'link') { showLink(); return true }
+  if (name === 'link') { if (nativeLinkEditor) requestLink(); else showLink(); return true }
   const commands = {
     toggleBold: chain => chain.toggleBold(),
     toggleItalic: chain => chain.toggleItalic(),
@@ -251,6 +261,15 @@ function runCommand(name, value) {
     redo: chain => chain.redo(),
     unsetLink: chain => chain.extendMarkRange('link').unsetLink(),
     setLink: chain => chain.extendMarkRange('link').setLink({ href: String(value?.href ?? value) }),
+    // Links the selection or the link at the caret; with nothing selected,
+    // inserts the address itself as linked text.
+    applyLink: chain => {
+      const href = String(value?.href ?? value)
+      if (editor.state.selection.empty && !editor.isActive('link')) {
+        return chain.insertContent({ type: 'text', text: href, marks: [{ type: 'link', attrs: { href } }] })
+      }
+      return chain.extendMarkRange('link').setLink({ href })
+    },
     insertMarkdown: chain => chain.insertContent(editor.markdown.parse(String(value)).content),
   }
   if (!commands[name]) return false
@@ -390,6 +409,7 @@ window.jot = {
   },
   focus: () => current?.editor.commands.focus(),
   setToolbarVisible(visible) { toolbar.hidden = !visible; emitHeight() },
+  setNativeLinkEditor(enabled) { nativeLinkEditor = Boolean(enabled); if (nativeLinkEditor) linkBar.hidden = true },
   find,
   nextMatch,
 }

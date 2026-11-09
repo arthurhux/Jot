@@ -7,6 +7,16 @@ final class EditorController: NSObject, ObservableObject {
     @Published var isReady = false
     @Published var failure: String?
     @Published var matchCount = 0
+    /// Active marks and blocks at the caret, keyed by editor command name.
+    @Published private(set) var formatting: [String: Bool] = [:]
+    @Published private(set) var formattingEditable = false
+    /// The editor asked for the native link field (see LinkEditor).
+    struct LinkRequest: Equatable {
+        let id = UUID()
+        var href: String
+        var hasSelection: Bool
+    }
+    @Published var linkRequest: LinkRequest?
     weak var webView: WKWebView?
     let store: NoteStore
     var onHeight: ((Double) -> Void)?
@@ -16,6 +26,8 @@ final class EditorController: NSObject, ObservableObject {
     private var dark = false
     private var searchQuery = ""
     private var modalPresented = false
+    private var translucent = false
+    private var secondaryHex: String?
 
     init(store: NoteStore) { self.store = store }
 
@@ -48,6 +60,31 @@ final class EditorController: NSObject, ObservableObject {
 
     func focus() { if !modalPresented { execute("window.jot.focus()") } }
 
+    /// Lets the window's material show through the page (macOS 26+ glass).
+    func setTranslucent(_ value: Bool) {
+        guard value != translucent else { return }
+        translucent = value
+        applyTranslucency()
+    }
+
+    /// Matches the page's muted text (placeholder, quotes, done tasks) to the
+    /// native secondary text, which is tuned for contrast over the window.
+    func setSecondaryText(_ hex: String) {
+        guard hex != secondaryHex else { return }
+        secondaryHex = hex
+        applySecondaryText()
+    }
+
+    private func applySecondaryText() {
+        guard isReady, let hex = secondaryHex else { return }
+        execute("document.documentElement.style.setProperty('--editor-muted', '\(hex)')")
+    }
+
+    private func applyTranslucency() {
+        guard isReady else { return }
+        execute("document.documentElement.classList.toggle('translucent', \(translucent ? "true" : "false"))")
+    }
+
     func setModalPresented(_ presented: Bool) {
         modalPresented = presented
         (webView as? EditorWebView)?.allowsEditorFocus = !presented
@@ -62,6 +99,20 @@ final class EditorController: NSObject, ObservableObject {
     }
 
     func nextMatch() { execute("window.jot.nextMatch()") }
+
+    func applyLink(_ href: String) {
+        linkRequest = nil
+        command("applyLink", value: href)
+    }
+    func removeLink() {
+        linkRequest = nil
+        command("unsetLink")
+    }
+    func cancelLink() {
+        guard linkRequest != nil else { return }
+        linkRequest = nil
+        focus()
+    }
     func showFormatting(_ visible: Bool) { execute("window.jot.setToolbarVisible(\(visible ? "true" : "false"))") }
 
     func captureSnapshot(completion: @escaping @MainActor () -> Void) {
@@ -91,6 +142,9 @@ final class EditorController: NSObject, ObservableObject {
             isReady = true
             failure = nil
             loadedID = nil
+            applyTranslucency()
+            applySecondaryText()
+            execute("window.jot.setNativeLinkEditor(true)")
             load(pendingNote, dark: dark)
         case "content": applyContent(message)
         case "selection":
@@ -101,6 +155,14 @@ final class EditorController: NSObject, ObservableObject {
             store.updateScroll(id: id, top: message["top"] as? Double ?? 0)
         case "height": onHeight?(message["value"] as? Double ?? 360)
         case "search": matchCount = message["count"] as? Int ?? 0
+        case "linkRequest":
+            linkRequest = LinkRequest(href: message["href"] as? String ?? "", hasSelection: message["hasSelection"] as? Bool ?? false)
+        case "formatting":
+            // Sent on every selection change: publish only real changes.
+            let states = message.compactMapValues { $0 as? Bool }
+            if states != formatting { formatting = states }
+            let editable = message["editable"] as? Bool ?? false
+            if editable != formattingEditable { formattingEditable = editable }
         case "error": failure = message["message"] as? String ?? "The editor encountered an error."
         default: break
         }
@@ -126,6 +188,8 @@ final class EditorController: NSObject, ObservableObject {
 struct NativeEditor: NSViewRepresentable {
     var note: Note?
     @ObservedObject var controller: EditorController
+    var translucent = false
+    var secondaryHex: String?
     @Environment(\.colorScheme) private var colorScheme
 
     func makeCoordinator() -> Coordinator { Coordinator(controller) }
@@ -147,11 +211,15 @@ struct NativeEditor: NSViewRepresentable {
         } else {
             controller.failure = "Editor files are missing. Rebuild Jot with scripts/build-app.sh."
         }
+        controller.setTranslucent(translucent)
+        if let secondaryHex { controller.setSecondaryText(secondaryHex) }
         controller.load(note, dark: colorScheme == .dark)
         return webView
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
+        controller.setTranslucent(translucent)
+        if let secondaryHex { controller.setSecondaryText(secondaryHex) }
         controller.load(note, dark: colorScheme == .dark)
     }
 

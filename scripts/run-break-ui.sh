@@ -30,6 +30,7 @@ cat > "$APP_PATH/Contents/Info.plist" <<'PLIST'
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>
 <key>JotBreakUILab</key><true/>
+<key>JotPrivacyPolicyURL</key><string>https://github.com/arthurhux/Jot/blob/main/PRIVACY.md</string>
 </dict></plist>
 PLIST
 xattr -dr com.apple.FinderInfo "$APP_PATH" 2>/dev/null || true

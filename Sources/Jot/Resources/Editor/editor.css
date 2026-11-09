@@ -27,6 +27,16 @@
   font-size: 16px;
   -webkit-font-smoothing: antialiased;
 }
+/* macOS 26+: the native window draws a standard material behind the note, so
+ * the page stops painting its own opaque paper. Hairlines and hover fills become
+ * translucent so they sit on the material instead of covering it. The native
+ * side removes this class when Reduce Transparency is on. */
+:root.translucent {
+  --paper: transparent;
+  --line: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --hover: color-mix(in oklab, var(--foreground) 8%, transparent);
+  --code: color-mix(in oklab, var(--foreground) 6%, transparent);
+}
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--paper); color: var(--ink); }
 body { display: flex; flex-direction: column; font-size: 14px; }
@@ -57,7 +67,10 @@ button:disabled, select:disabled { opacity: .35; }
 #scroller { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 #documents { max-width: 780px; margin: 0 auto; min-height: 100%; }
 .document { min-height: 100%; }
-.tiptap { outline: none; padding: 27px 34px 90px; font-size: 15px; line-height: 1.62; overflow-wrap: break-word; min-height: calc(100vh - 44px); caret-color: var(--editor-accent); tab-size: 2; white-space: pre-wrap; }
+/* Shares NoteLayout.inset (30 pt) with the native title above it. */
+.tiptap { outline: none; padding: 8px 30px 90px; font-size: 15px; line-height: 1.62; overflow-wrap: break-word; min-height: calc(100vh - 44px); caret-color: var(--editor-accent); tab-size: 2; white-space: pre-wrap; }
+/* Set only by the isolated UI Lab comparison. */
+.lab-reference-type .tiptap { line-height: 1.4; }
 .tiptap > :first-child { margin-top: 0; }
 .tiptap p { margin: 0 0 .78em; }
 .tiptap h1, .tiptap h2, .tiptap h3 { letter-spacing: -.025em; line-height: 1.28; margin: 1.35em 0 .5em; font-weight: 650; }
@@ -100,7 +113,6 @@ button:disabled, select:disabled { opacity: .35; }
   #toolbar button { width: 25px; }
   #block-type { width: 78px; }
   .divider { margin: 0 3px; }
-  .tiptap { padding-left: 24px; padding-right: 24px; }
 }
 @media (max-width: 420px) {
   :root { --editor-bar-inset: 12px; }

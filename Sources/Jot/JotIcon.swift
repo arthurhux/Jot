@@ -6,15 +6,19 @@ import SwiftUI
 struct JotIcon: View {
     let name: String
     var size: CGFloat
-    var color: Color
+    /// nil inherits the surrounding foreground style, so a control's hover and
+    /// on states can brighten its icon.
+    var color: Color?
     var preservesColor: Bool
-    nonisolated init(_ name: String, size: CGFloat = LucideGeometry.controlSize, color: Color = JotTheme.mutedForeground, preservesColor: Bool = false) { self.name = name; self.size = size; self.color = color; self.preservesColor = preservesColor }
+    nonisolated init(_ name: String, size: CGFloat = LucideGeometry.controlSize, color: Color? = nil, preservesColor: Bool = false) { self.name = name; self.size = size; self.color = color; self.preservesColor = preservesColor }
     var body: some View {
         Group {
-            if let image = Self.nativeImage(name, size: size, color: preservesColor ? NSColor(color) : nil) {
+            if let image = Self.nativeImage(name, size: size, color: preservesColor ? NSColor(color ?? JotTheme.mutedForeground) : nil) {
                 Image(nsImage: image).renderingMode(preservesColor ? .original : .template)
             } else { Color.clear }
-        }.foregroundStyle(color).frame(width: size, height: size).accessibilityHidden(true)
+        }
+        .modifier(OptionalForeground(color: color))
+        .frame(width: size, height: size).accessibilityHidden(true)
     }
 
     private static func vectorPath(_ name: String) -> CGPath? { LucideGeometry.paths[aliases[name] ?? name] }
@@ -49,6 +53,13 @@ struct JotIcon: View {
         "arrow.uturn.backward": "undo-2", "chevron.down": "chevron-down", "xmark": "x",
         "exclamationmark.triangle": "triangle-alert", "info.circle": "info",
     ]
+}
+
+private struct OptionalForeground: ViewModifier {
+    let color: Color?
+    func body(content: Content) -> some View {
+        if let color { content.foregroundStyle(color) } else { content }
+    }
 }
 
 extension Label where Title == Text, Icon == JotIcon {

@@ -15,12 +15,21 @@ enum ModalStyle {
 /// Native point sizes for the compact utility modals; captions stay at 12pt.
 enum ModalTypography {
     static let title = Font.system(size: 17, weight: .semibold)
+    /// HIG macOS Headline: 13 pt bold, the window-title weight.
+    static let windowTitle = Font.system(size: 13, weight: .semibold)
+    /// The note's own title: HIG macOS Title 1 (22 pt), bold like Raycast Notes.
+    static let noteHeading = Font.system(size: 22, weight: .bold)
     static let label = Font.system(size: 13, weight: .medium)
     static let section = Font.system(size: 12, weight: .semibold)
     static let caption = Font.system(size: 12)
     static let noteTitle = Font.system(size: 14, weight: .medium)
     static let shortcut = Font.system(size: 14, weight: .medium)
     static let descriptionLineSpacing = 3.0
+    static let referenceWindowTitle = Font.system(size: 14, weight: .semibold)
+    static let referenceEditorTitle = Font.system(size: 22, weight: .bold)
+    static let referenceNoteTitle = Font.system(size: 14, weight: .semibold)
+    static let referenceMetadata = Font.system(size: 14, weight: .medium)
+    static let referenceSearch = NSFont.systemFont(ofSize: 14, weight: .medium)
 }
 
 enum ModalLayout {
@@ -30,20 +39,22 @@ enum ModalLayout {
     static let emptyResultsHeight = 110.0
     static let minimumBrowserHeight = 240.0
     static let maximumBrowserHeight = 500.0
-    static let settingsHeight = 370.0
+    static let settingsHeight = 400.0
     static let settingsInset = 22.0
     static let settingsSectionSpacing = 24.0
     static let settingsRowHeight = 40.0
     static let shortcutSpacing = 6.0
 }
 
-/// Frost only the card; the surrounding note stays sharp beneath the scrim.
+/// The macOS 14–15 modal card: frost only the card while the note stays sharp
+/// beneath the scrim. `solid` replaces the material for Reduce Transparency.
+/// macOS 26+ uses system Liquid Glass instead (see `ModalCard`).
 struct ModalSurface: View {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    var solid = false
 
     var body: some View {
         ZStack {
-            if reduceTransparency {
+            if solid {
                 JotTheme.popover
             } else {
                 ModalMaterial()
@@ -75,6 +86,10 @@ private struct ModalMaterial: NSViewRepresentable {
 struct NotesSearchField: NSViewRepresentable {
     @Binding var text: String
     var focusToken: Int
+    var placeholder = "Search for notes…"
+    var placeholderColor = NSColor(JotTheme.mutedForeground)
+    var label = "Search notes"
+    var referenceTypography = false
     var submit: () -> Void
     var move: (Int) -> Void
     var dismiss: () -> Void
@@ -89,19 +104,26 @@ struct NotesSearchField: NSViewRepresentable {
         // default blue rectangle competing with the modal's search surface.
         field.focusRingType = .none
         field.cell?.focusRingType = .none
-        field.font = .systemFont(ofSize: 15)
         field.textColor = NSColor(JotTheme.foreground)
-        field.placeholderAttributedString = NSAttributedString(string: "Search for notes…", attributes: [.foregroundColor: NSColor(JotTheme.mutedForeground)])
         field.cell?.usesSingleLineMode = true
         field.cell?.isScrollable = true
         field.delegate = context.coordinator
         field.identifier = NSUserInterfaceItemIdentifier("notesSearch")
-        field.setAccessibilityLabel("Search notes")
+        field.setAccessibilityLabel(label)
         field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return field
     }
     func updateNSView(_ field: ModalTextField, context: Context) {
         context.coordinator.parent = self
+        if field.placeholderAttributedString?.string != placeholder || context.coordinator.placeholderColor != placeholderColor {
+            context.coordinator.placeholderColor = placeholderColor
+            field.placeholderAttributedString = NSAttributedString(string: placeholder, attributes: [.foregroundColor: placeholderColor])
+        }
+        let font = referenceTypography ? ModalTypography.referenceSearch : .systemFont(ofSize: 15)
+        if field.font != font {
+            field.font = font
+            (field.currentEditor() as? NSTextView)?.font = font
+        }
         if field.stringValue != text { field.stringValue = text }
         if context.coordinator.focusToken != focusToken {
             context.coordinator.focusToken = focusToken
@@ -125,6 +147,7 @@ struct NotesSearchField: NSViewRepresentable {
     @MainActor final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: NotesSearchField
         var focusToken: Int?
+        var placeholderColor: NSColor?
         init(_ parent: NotesSearchField) { self.parent = parent }
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSTextField else { return }

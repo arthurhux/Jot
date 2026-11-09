@@ -22,6 +22,10 @@
     <string>1.0.1</string>
     <key>CFBundleVersion</key>
     <string>2</string>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>JotPrivacyPolicyURL</key>
+    <string>https://github.com/arthurhux/Jot/blob/main/PRIVACY.md</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.productivity</string>
     <key>LSMinimumSystemVersion</key>
